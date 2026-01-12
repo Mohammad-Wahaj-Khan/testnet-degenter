@@ -1,0 +1,438 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { FaTelegramPlane } from "react-icons/fa";
+import { BsTwitterX } from "react-icons/bs";
+import { HiGlobeAsiaAustralia } from "react-icons/hi2";
+import { useParams } from "next/navigation";
+import TokenStats from "./TokenStats";
+import { Link } from "lucide-react";
+import Image from "next/image";
+import { useTokenSummary } from "@/app/hooks/useTokenSummary";
+import { tokenAPI, type TokenDetailResponse } from "@/lib/api";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+/* ---------------- Types ---------------- */
+interface Token {
+  id: number;
+  name: string;
+  symbol: string;
+  description: string;
+  icon: string | null;
+  twitter?: string | null;
+  telegram?: string | null;
+  website?: string | null;
+  socials?: {
+    twitter?: {
+      handle?: string;
+      userId?: string;
+      name?: string;
+      isBlueVerified?: boolean;
+      verifiedType?: string | null;
+      profilePicture?: string;
+      coverPicture?: string;
+      followers?: number;
+      following?: number;
+      createdAtTwitter?: string;
+      lastRefreshed?: string;
+    };
+  };
+}
+
+/* ---------------- Helpers ---------------- */
+const findIbcMeta = async (denom: string) => {
+  try {
+    const res = await fetch(`${API_BASE}/tokens/swap-list?bucket=24h&unit=usd`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const match =
+      json?.data?.find(
+        (t: { denom?: string }) =>
+          typeof t?.denom === "string" &&
+          t.denom.toLowerCase() === denom.toLowerCase()
+      ) || null;
+    return match
+      ? {
+          symbol: match.symbol as string | undefined,
+          imageUri: match.imageUri as string | undefined,
+        }
+      : null;
+  } catch (err) {
+    console.error("Error fetching IBC meta:", err);
+    return null;
+  }
+};
+
+/* ---------------- Fetch Token ---------------- */
+async function fetchTokenBySymbol(symbol: string): Promise<Token | null> {
+  try {
+    const safeSymbol = encodeURIComponent(symbol);
+    const url = `${API_BASE}/tokens/${safeSymbol}?priceSource=best&includePools=1`;
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      console.error(`API Error: ${res.status} ${res.statusText}`);
+      const errorText = await res.text();
+      console.error("Response:", errorText);
+      return null;
+    }
+
+    const json = await res.json();
+    if (!json?.success) {
+      console.error("API returned unsuccessful response:", json);
+      return null;
+    }
+
+    const t = json.data;
+    if (!t) {
+      console.error("No data in API response");
+      return null;
+    }
+
+    const twitterHandle =
+      t.twitter || t.socials?.twitter?.handle || t.socials?.twitter?.userId;
+    const twitterUrl = twitterHandle ? `${twitterHandle}` : null;
+    // console.log(twitterUrl)
+
+    let derivedSymbol = t.symbol || "";
+    let derivedIcon = t.imageUri || null;
+
+    if (symbol.toLowerCase().startsWith("ibc/")) {
+      const ibcMeta = await findIbcMeta(symbol);
+      if (ibcMeta?.symbol) derivedSymbol = ibcMeta.symbol;
+      if (ibcMeta?.imageUri) derivedIcon = ibcMeta.imageUri;
+      if (!derivedSymbol) {
+        const parts = symbol.split("/");
+        derivedSymbol = (parts[parts.length - 1] || symbol).toUpperCase();
+      }
+    }
+
+    return {
+      id: Number(t.tokenId || 0),
+      name: t.name || "Unknown",
+      symbol: derivedSymbol,
+      description: t.description || "",
+      icon: derivedIcon,
+      twitter: twitterUrl,
+      telegram: t.telegram || null,
+      website: t.website || null,
+      socials: t.socials || {},
+    };
+  } catch (err) {
+    console.error("Error fetching token:", err);
+    return null;
+  }
+}
+
+/* ---------------- Skeleton Loader ---------------- */
+// Skeleton loader component
+const SkeletonLoader = () => (
+  <div className="animate-pulse space-y-4 p-4">
+    {/* Header with token info */}
+    <div className="flex items-center space-x-4">
+      <div className="h-16 w-16 rounded-full bg-gray-700"></div>
+      <div className="flex-1 space-y-2">
+        <div className="h-6 w-3/4 bg-gray-700 rounded"></div>
+        <div className="h-4 w-1/2 bg-gray-700 rounded"></div>
+      </div>
+    </div>
+
+    {/* Stats grid */}
+    <div className="grid grid-cols-2 gap-4 pt-4">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="space-y-2">
+          <div className="h-4 bg-gray-700 rounded w-3/4"></div>
+          <div className="h-6 bg-gray-700 rounded w-full"></div>
+        </div>
+      ))}
+    </div>
+
+    {/* Price chart placeholder */}
+    <div className="h-40 bg-gray-700 rounded-lg mt-4"></div>
+  </div>
+);
+
+/* ---------------- Component ---------------- */
+export default function AddLeft() {
+  const [error, setError] = useState<string | null>(null);
+  const { tokenDetails } = useParams();
+  const [token, setToken] = useState<Token | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [summaryFallback, setSummaryFallback] =
+    useState<TokenDetailResponse["data"] | null>(null);
+  const tokenKey = Array.isArray(tokenDetails) ? tokenDetails[0] : tokenDetails;
+  const { data: summaryData } = useTokenSummary({
+    tokenId: token?.id,
+    tokenKey,
+  });
+  const summary = summaryData ?? summaryFallback;
+
+  const formatCompact = (value?: number, prefix = "$") => {
+    if (value == null || !Number.isFinite(value)) return "—";
+    return `${prefix}${Intl.NumberFormat("en-US", {
+      notation: "compact",
+      maximumFractionDigits: 2,
+    }).format(value)}`;
+  };
+
+  const priceUsd = summary?.price?.usd ?? summary?.priceInUsd ?? undefined;
+  const change24h =
+    summary?.priceChange?.["24h"] ?? summary?.price?.changePct?.["24h"];
+  const changeLabel =
+    change24h == null || !Number.isFinite(change24h)
+      ? "—"
+      : `${change24h >= 0 ? "+" : ""}${change24h.toFixed(2)}%`;
+  const changeClass =
+    change24h != null && Number.isFinite(change24h)
+      ? change24h >= 0
+        ? "text-green-400"
+        : "text-red-400"
+      : "text-gray-300";
+
+  useEffect(() => {
+    if (!tokenDetails) return;
+    if (!tokenKey) return;
+
+    const loadToken = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const t = await fetchTokenBySymbol(tokenKey);
+        if (!t) {
+          setError("Token not found");
+        }
+        setToken(t);
+      } catch (err) {
+        console.error("Failed to fetch token:", err);
+        setError("Failed to load token data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadToken();
+  }, [tokenDetails, tokenKey]);
+
+  useEffect(() => {
+    if (!tokenKey || summaryData) return;
+    setSummaryFallback(null);
+    let active = true;
+    tokenAPI
+      .getTokenDetailsBySymbol(tokenKey, "best", true)
+      .then((res) => {
+        if (!active) return;
+        if (res?.data) setSummaryFallback(res.data);
+      })
+      .catch((err) => {
+        console.error("Failed to load token summary fallback:", err);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tokenKey, summaryData]);
+
+  /* ---------------- UI ---------------- */
+  return (
+    <div className="backdrop-blur-sm rounded-xl w-full lg:w-80 mx-auto">
+      {/* ✅ Case 1: Socials exist — Twitter-style header */}
+      {loading ? (
+        <SkeletonLoader />
+      ) : error ? (
+        <div className="p-4 text-center text-red-400">{error}</div>
+      ) : token?.socials?.twitter?.coverPicture &&
+        token?.socials?.twitter?.profilePicture ? (
+        <div className="rounded-lg mt-3 overflow-hidden bg-black/20 border border-[#ffffff22] shadow-md">
+          {/* Cover Photo */}
+          <div
+            className="relative w-full h-32 bg-center bg-cover"
+            style={{
+              backgroundImage: `url('${token.socials.twitter.coverPicture}')`,
+            }}
+          >
+            {/* Profile Picture */}
+            <div className="absolute -bottom-8 left-[50px] transform -translate-x-1/2">
+              <Image
+                src={token.socials.twitter.profilePicture}
+                alt="profile"
+                width={64}
+                height={64}
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-black shadow-lg object-cover"
+              />
+            </div>
+          </div>
+
+          {/* Profile Info */}
+          <div className="pt-10 px-4 pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-1">
+                  <h2 className="text-lg font-bold text-white">
+                    {token.socials.twitter.name || token.name}
+                  </h2>
+                  {token.socials.twitter.isBlueVerified && (
+                    <svg
+                      className="w-4 h-4 text-blue-400"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-label="Verified account"
+                    >
+                      <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.929.084-1.352.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.42-.165-.88-.25-1.353-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.02-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.164.865.25 1.336.25 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484zm-6.616-3.334l-4.334 6.5c-.145.217-.382.334-.625.334-.143 0-.288-.04-.416-.126l-.115-.094-2.415-2.415c-.293-.293-.293-.768 0-1.06s.768-.294 1.06 0l1.77 1.767 3.825-5.74c.23-.345.696-.436 1.04-.207.346.23.44.696.21 1.04z" />
+                    </svg>
+                  )}
+                </div>
+                <p className="text-gray-400 text-sm">
+                  @{token.socials.twitter.handle}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {token.telegram && (
+                  <a
+                    href={token.telegram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
+                  >
+                    <FaTelegramPlane size={15} className="text-white" />
+                  </a>
+                )}
+                {token.twitter && (
+                  <a
+                    href={token.twitter}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
+                  >
+                    <BsTwitterX size={13} className="text-white" />
+                  </a>
+                )}
+                {token.website && (
+                  <a
+                    href={token.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
+                  >
+                    <HiGlobeAsiaAustralia size={15} className="text-white" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="flex gap-4 mt-3 text-sm text-gray-300">
+              {token.socials.twitter.followers !== undefined && (
+                <div className="flex items-center gap-1">
+                  <span className="font-medium text-white">
+                    {new Intl.NumberFormat("en-US", {
+                      notation: "compact",
+                      maximumFractionDigits: 1,
+                    }).format(token.socials.twitter.followers)}
+                  </span>
+                  <span>Followers</span>
+                </div>
+              )}
+              {token.socials.twitter.following !== undefined && (
+                <div className="flex items-center gap-1">
+                  <span className="font-medium text-white">
+                    {token.socials.twitter.following.toLocaleString()}
+                  </span>
+                  <span>Following</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ✅ Case 2: Default fallback block */
+        <div
+          className="rounded-lg p-2 mt-3 bg-cover bg-center bg-no-repeat h-32 w-full"
+          style={{
+            backgroundImage: "url('/defaultframe.png')",
+          }}
+        >
+          <div className="flex gap-2 justify-center mb-2">
+            <div className="flex-col items-center justify-center">
+              <h3 className="text-white font-medium text-[1.5rem] text-center">
+                {token?.name}
+              </h3>
+              <p className="text-white text-[0.7rem] text-center max-w-full px-2 break-words line-clamp-2">
+                {token?.description}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-center">
+            <span className="bg-black/50 px-2 py-1 rounded-[0.3rem]">
+              <FaTelegramPlane size={14} />
+              {token?.telegram}
+              {token?.telegram && (
+                <Link href={token.telegram} target="_blank">
+                  <HiGlobeAsiaAustralia size={15} className="text-white" />
+                </Link>
+              )}
+            </span>
+            <span className="bg-black/50 px-2 py-1 rounded-[0.3rem]">
+              <BsTwitterX size={12} />
+              {token?.twitter && (
+                <Link href={token.twitter} target="_blank">
+                  <HiGlobeAsiaAustralia size={15} className="text-white" />
+                </Link>
+              )}
+            </span>
+            <span className="bg-black/50 px-2 py-1 rounded-[0.3rem]">
+              <HiGlobeAsiaAustralia size={14} />
+              {token?.website && (
+                <Link href={token.website} target="_blank">
+                  <HiGlobeAsiaAustralia size={15} className="text-white" />
+                </Link>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Live price row */}
+      {summary && (
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm text-white">
+          <div className="bg-black/40 rounded-lg py-2">
+            <div className="text-xs text-gray-400">Price</div>
+            <div className="font-medium">
+              {priceUsd != null && Number.isFinite(priceUsd)
+                ? `$${priceUsd.toPrecision(6)}`
+                : "—"}
+            </div>
+          </div>
+          <div className="bg-black/40 rounded-lg py-2">
+            <div className="text-xs text-gray-400">24h</div>
+            <div className={`font-medium ${changeClass}`}>{changeLabel}</div>
+          </div>
+          <div className="bg-black/40 rounded-lg py-2">
+            <div className="text-xs text-gray-400">MCap</div>
+            <div className="font-medium">
+              {formatCompact(summary.mcapDetail?.usd ?? summary.mc, "$")}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Token Stats Section */}
+      <div className="mt-3">
+        {token ? (
+          <TokenStats
+            tokenId={token.id}
+            tokenKey={tokenKey}
+            summaryData={summary}
+          />
+        ) : loading ? (
+          <div className="text-gray-400 text-center py-4">
+            Loading token info…
+          </div>
+        ) : (
+          <div className="text-gray-500 text-center py-3">
+            No token data found
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
