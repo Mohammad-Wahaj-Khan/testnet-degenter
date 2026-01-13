@@ -98,7 +98,7 @@ async function fetchTokenBySymbol(symbol: string): Promise<Token | null> {
 
 const getDefaultFilters = (): TradesFilter => ({
   assetMode: "all",
-  timeRange: "30m",
+  timeRange: "24H",
   valueRange: "",
   tokenDenom: "",
   wallet: "",

@@ -11,6 +11,99 @@ const ZIGCHAIN_LABEL = "Oroswap";
 const Degenter_Label = "Degenter";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "https://testnet-api.degenter.io";
+const API_KEY =
+  process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
+const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};
+const TRADES_WS_URL = process.env.NEXT_PUBLIC_TRADES_WS_URL || "";
+const MAX_TRADES = 500;
+const TOKEN_OPTIONS_CACHE: { loaded: boolean; options: TokenOption[] } = {
+  loaded: false,
+  options: [],
+};
+type TradesWsListener = (event: MessageEvent) => void;
+const tradesWsHub = {
+  ws: null as WebSocket | null,
+  reconnectTimeout: null as NodeJS.Timeout | null,
+  reconnectAttempts: 0,
+  connecting: false,
+  allowReconnect: true,
+  listeners: new Set<TradesWsListener>(),
+};
+
+const notifyTradesWsListeners = (event: MessageEvent) => {
+  tradesWsHub.listeners.forEach((listener) => listener(event));
+};
+
+const ensureTradesWs = () => {
+  if (!TRADES_WS_URL) return;
+  if (
+    tradesWsHub.ws &&
+    (tradesWsHub.ws.readyState === WebSocket.OPEN ||
+      tradesWsHub.ws.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
+  if (tradesWsHub.connecting) return;
+
+  tradesWsHub.connecting = true;
+
+  try {
+    const ws = new WebSocket(TRADES_WS_URL);
+    tradesWsHub.ws = ws;
+
+    ws.onopen = () => {
+      tradesWsHub.connecting = false;
+      tradesWsHub.reconnectAttempts = 0;
+      ws.send(JSON.stringify({ type: "sub", stream: "trades" }));
+    };
+
+    ws.onmessage = notifyTradesWsListeners;
+
+    ws.onerror = () => {
+      tradesWsHub.connecting = false;
+    };
+
+    ws.onclose = () => {
+      tradesWsHub.ws = null;
+      tradesWsHub.connecting = false;
+      if (!tradesWsHub.allowReconnect || tradesWsHub.listeners.size === 0) return;
+      if (tradesWsHub.reconnectAttempts < 5) {
+        const delay = Math.min(
+          1000 * Math.pow(2, tradesWsHub.reconnectAttempts),
+          30000
+        );
+        tradesWsHub.reconnectAttempts += 1;
+        tradesWsHub.reconnectTimeout = setTimeout(() => {
+          ensureTradesWs();
+        }, delay);
+      }
+    };
+  } catch {
+    tradesWsHub.connecting = false;
+  }
+};
+
+const addTradesWsListener = (listener: TradesWsListener) => {
+  tradesWsHub.listeners.add(listener);
+  tradesWsHub.allowReconnect = true;
+  ensureTradesWs();
+
+  return () => {
+    tradesWsHub.listeners.delete(listener);
+    if (tradesWsHub.listeners.size > 0) return;
+    tradesWsHub.allowReconnect = false;
+    if (tradesWsHub.reconnectTimeout) {
+      clearTimeout(tradesWsHub.reconnectTimeout);
+      tradesWsHub.reconnectTimeout = null;
+    }
+    if (tradesWsHub.ws) {
+      try {
+        tradesWsHub.ws.close();
+      } catch {}
+      tradesWsHub.ws = null;
+    }
+  };
+};
 
 export interface Trade {
   time: string;
@@ -34,7 +127,7 @@ export type ValueRangeLabel =
 
 export interface TradesFilter {
   assetMode: "all" | "token";
-  timeRange: "30m" | "1H" | "2H";
+  timeRange: "24H" | "7D" | "30D";
   valueRange: ValueRangeLabel | "";
   tokenDenom: string;
   wallet: string;
@@ -46,9 +139,14 @@ export interface TokenOption {
 }
 
 const TIME_RANGE_MS: Record<TradesFilter["timeRange"], number> = {
-  "30m": 30 * 60 * 1000,
-  "1H": 60 * 60 * 1000,
-  "2H": 2 * 60 * 60 * 1000,
+  "24H": 24 * 60 * 60 * 1000,
+  "7D": 7 * 24 * 60 * 60 * 1000,
+  "30D": 30 * 24 * 60 * 60 * 1000,
+};
+const TIME_RANGE_API: Record<TradesFilter["timeRange"], string> = {
+  "24H": "24h",
+  "7D": "7d",
+  "30D": "30d",
 };
 
 interface TradesProps {
@@ -64,7 +162,11 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
   const tradesPerPage = 10;
   const [symbolMap, setSymbolMap] = useState<Record<string, string>>({});
   const [tokenImageMap, setTokenImageMap] = useState<Record<string, string>>({});
+  const [allTokenOptions, setAllTokenOptions] = useState<TokenOption[]>([]);
   const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const hasWsTradesRef = useRef(false);
+  const tradesRef = useRef<Trade[]>([]);
+  const wsMessageHandlerRef = useRef<(event: MessageEvent) => void>(() => {});
 
   // Colors from image_cc0611.png (Figma)
   const COLORS = {
@@ -74,25 +176,14 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
     rowHover: "rgba(255, 255, 255, 0.03)",
   };
 
-  const fetchTrades = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/trades`);
-      const json = await res.json();
-      if (json.success) {
-        setTrades(json.data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch trades", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchTrades();
-    const interval = setInterval(fetchTrades, 10000);
-    return () => clearInterval(interval);
-  }, [fetchTrades]);
+  const fetchApi = useCallback(
+    (url: string, init: RequestInit = {}) =>
+      fetch(url, {
+        ...init,
+        headers: { ...API_HEADERS, ...(init.headers || {}) },
+      }),
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -141,11 +232,53 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (TOKEN_OPTIONS_CACHE.loaded) {
+      setAllTokenOptions(TOKEN_OPTIONS_CACHE.options);
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await fetchApi(
+          `${API_BASE}/tokens?bucket=24h&priceSource=best&sort=volume&dir=desc&includeChange=1&limit=200&offset=0`
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const items: Array<{ denom?: string; tokenId?: string; symbol?: string }> =
+          json?.data ?? [];
+        const options = items
+          .map((token) => {
+            const denom = token.denom || token.tokenId || "";
+            return {
+              denom,
+              label: token.symbol || denom,
+            };
+          })
+          .filter((option) => option.denom && !isZigDenom(option.denom));
+
+        if (!cancelled) {
+          TOKEN_OPTIONS_CACHE.options = options;
+          TOKEN_OPTIONS_CACHE.loaded = true;
+          setAllTokenOptions(options);
+        }
+      } catch (error) {
+        console.error("Failed to load token options", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchApi]);
+
   const formatTime = (timeStr: string) => {
     const diff = Math.floor((new Date().getTime() - new Date(timeStr).getTime()) / 1000);
     if (diff < 60) return `${diff}s ago`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    return `${Math.floor(diff / 3600)}hr ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}hr ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
   };
 
   const getEntityIcon = (tradeClass: Trade["class"]) => {
@@ -202,6 +335,283 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
 
   const isZigDenom = (denom?: string) => denom?.toLowerCase().includes("uzig");
 
+  const tradeKey = (trade: Trade) =>
+    trade.txHash || `${trade.signer}:${trade.time}:${trade.offerDenom}:${trade.askDenom}`;
+
+  const getZigSideAmount = (
+    offerDenom: string,
+    askDenom: string,
+    direction: Trade["direction"],
+    offerAmount: number,
+    returnAmount: number
+  ) => {
+    const offeringZig = isZigDenom(offerDenom);
+    const askingZig = isZigDenom(askDenom);
+
+    if (direction === "buy" && offeringZig) return offerAmount;
+    if (direction === "sell" && askingZig) return returnAmount;
+    if (offeringZig) return offerAmount;
+    if (askingZig) return returnAmount;
+    return 0;
+  };
+
+  const getTradeClass = (zigAmount: number = 0): Trade["class"] => {
+    if (zigAmount >= 10000) return "whale";
+    if (zigAmount >= 1000) return "shark";
+    return "shrimp";
+  };
+
+  const normalizeWsAmount = (raw: number, denom: string) => {
+    if (!Number.isFinite(raw)) return 0;
+    if (isZigDenom(denom)) return raw / 1_000_000;
+    return raw / 1_000_000;
+  };
+
+  const unwrapTradePayload = (payload: any): any => {
+    if (!payload || typeof payload !== "object") return payload;
+    if (
+      payload.direction ||
+      payload.offer_amount_base ||
+      payload.offerAmount ||
+      payload.offer_amount ||
+      payload.return_amount_base ||
+      payload.returnAmount ||
+      payload.return_amount ||
+      payload.action ||
+      payload.trade_id ||
+      payload.tradeId
+    ) {
+      return payload;
+    }
+    if (payload.data) return unwrapTradePayload(payload.data);
+    return payload;
+  };
+
+  const mapStreamTradeToLocal = (item: any): Trade | null => {
+    try {
+      const tradeData = unwrapTradePayload(item);
+      if (!tradeData) return null;
+
+      const direction = (tradeData.direction as Trade["direction"]) || "buy";
+      const offerDenom = tradeData.offer_asset_denom ?? tradeData.offerDenom ?? "";
+      const askDenom = tradeData.ask_asset_denom ?? tradeData.askDenom ?? "";
+      const offerAmountRaw = Number(
+        tradeData.offer_amount_base ??
+          tradeData.offerAmountBase ??
+          tradeData.offer_amount ??
+          tradeData.offerAmount ??
+          0
+      );
+      const returnAmountRaw = Number(
+        tradeData.return_amount_base ??
+          tradeData.returnAmountBase ??
+          tradeData.return_amount ??
+          tradeData.returnAmount ??
+          0
+      );
+
+      const offerAmount = tradeData.offerAmount
+        ? Number(tradeData.offerAmount)
+        : normalizeWsAmount(offerAmountRaw, offerDenom);
+      const returnAmount = tradeData.returnAmount
+        ? Number(tradeData.returnAmount)
+        : normalizeWsAmount(returnAmountRaw, askDenom);
+
+      const zigAmount = getZigSideAmount(
+        offerDenom,
+        askDenom,
+        direction,
+        offerAmount,
+        returnAmount
+      );
+
+      const priceUsd = Number(
+        tradeData.price_in_usd ??
+          tradeData.priceInUsd ??
+          tradeData.price_usd ??
+          0
+      );
+      const valueUsd = Number(
+        tradeData.value_in_usd ??
+          tradeData.valueUsd ??
+          tradeData.value_usd ??
+          (priceUsd ? priceUsd * (direction === "sell" ? offerAmount : returnAmount) : 0)
+      );
+
+      return {
+        time: tradeData.created_at ?? item?.ts ?? new Date().toISOString(),
+        txHash: tradeData.tx_hash ?? tradeData.txHash ?? item?.tx_hash ?? "",
+        direction,
+        offerDenom,
+        offerAmount,
+        askDenom,
+        returnAmount,
+        valueNative: zigAmount || undefined,
+        valueUsd,
+        priceUsd,
+        signer: tradeData.signer ?? "",
+        class: getTradeClass(zigAmount),
+      };
+    } catch (error) {
+      console.error("Error parsing trade from stream:", error);
+      return null;
+    }
+  };
+
+  const parseTradesFromStreamMessage = (
+    msg: any
+  ): { trades: Trade[]; isSnapshot: boolean } => {
+    if (!msg) return { trades: [], isSnapshot: false };
+    const isSnapshot = msg.type === "snapshot";
+    let items: any[] = [];
+
+    if (msg.type === "trade") {
+      items = [msg.data ?? msg];
+    } else if (isSnapshot && Array.isArray(msg.data)) {
+      items = msg.data;
+    } else if (Array.isArray(msg.data)) {
+      items = msg.data;
+    }
+
+    if (!items.length) return { trades: [], isSnapshot };
+
+    const mapped = items
+      .map(mapStreamTradeToLocal)
+      .filter(Boolean) as Trade[];
+
+    return { trades: mapped, isSnapshot };
+  };
+
+  const mapApiTradeToLocal = (trade: any): Trade => {
+    const direction = (trade.direction as Trade["direction"]) || "buy";
+    const offerDenom = trade.offerDenom ?? trade.offer_denom ?? "";
+    const askDenom = trade.askDenom ?? trade.ask_denom ?? "";
+    const offerAmount = Number(trade.offerAmount ?? trade.offer_amount ?? 0);
+    const returnAmount = Number(trade.returnAmount ?? trade.return_amount ?? 0);
+    const zigAmount = getZigSideAmount(
+      offerDenom,
+      askDenom,
+      direction,
+      offerAmount,
+      returnAmount
+    );
+
+    return {
+      time: trade.time ?? trade.created_at ?? "",
+      txHash: trade.txHash ?? trade.tx_hash ?? "",
+      direction,
+      offerDenom,
+      offerAmount,
+      askDenom,
+      returnAmount,
+      valueNative: Number(trade.valueNative ?? zigAmount ?? 0) || undefined,
+      valueUsd: Number(trade.valueUsd ?? trade.value_usd ?? 0),
+      priceUsd: Number(trade.priceUsd ?? trade.price_usd ?? 0),
+      signer: trade.signer ?? "",
+      class: getTradeClass(zigAmount),
+    };
+  };
+
+  const fetchTradesFromApi = useCallback(async () => {
+    const timeframe = TIME_RANGE_API[filters.timeRange] ?? "24h";
+    const tokenDenom = filters.tokenDenom.trim();
+    const endpoint = tokenDenom
+      ? `${API_BASE}/trades/token/${encodeURIComponent(
+          tokenDenom
+        )}?tf=${timeframe}&unit=usd&limit=5000`
+      : `${API_BASE}/trades?tf=${timeframe}&unit=usd&limit=5000`;
+    try {
+      if (!tradesRef.current.length) {
+        setLoading(true);
+      }
+      const res = await fetchApi(endpoint);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json?.success && Array.isArray(json.data)) {
+        const mapped = json.data.map(mapApiTradeToLocal);
+        setTrades(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to fetch trades", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchApi, filters.timeRange, filters.tokenDenom]);
+
+  useEffect(() => {
+    wsMessageHandlerRef.current = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        const { trades: tradesFromMessage, isSnapshot } =
+          parseTradesFromStreamMessage(msg);
+        if (!tradesFromMessage.length) return;
+
+        hasWsTradesRef.current = true;
+        setTrades((prev) => {
+          if (isSnapshot) {
+            if (!prev.length) return tradesFromMessage.slice(0, MAX_TRADES);
+            const seen = new Set(prev.map(tradeKey));
+            const incoming = tradesFromMessage.filter(
+              (trade) => !seen.has(tradeKey(trade))
+            );
+            if (!incoming.length) return prev;
+            return [...incoming, ...prev].slice(0, MAX_TRADES);
+          }
+
+          const seen = new Set(prev.map(tradeKey));
+          const incoming = tradesFromMessage.filter(
+            (trade) => !seen.has(tradeKey(trade))
+          );
+          if (!incoming.length) return prev;
+          return [...incoming, ...prev].slice(0, MAX_TRADES);
+        });
+        setLoading(false);
+      } catch (error) {
+        console.error("Error processing WebSocket message:", error);
+      }
+    };
+  }, [parseTradesFromStreamMessage, tradeKey]);
+
+  useEffect(() => {
+    if (!TRADES_WS_URL) return;
+    const listener = (event: MessageEvent) => {
+      wsMessageHandlerRef.current(event);
+    };
+    const unsubscribe = addTradesWsListener(listener);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!filters.tokenDenom) {
+      if (!TRADES_WS_URL) {
+        fetchTradesFromApi();
+      }
+      return;
+    }
+    fetchTradesFromApi();
+  }, [fetchTradesFromApi, filters.tokenDenom]);
+
+  useEffect(() => {
+    tradesRef.current = trades;
+  }, [trades]);
+
+  useEffect(() => {
+    if (!TRADES_WS_URL) return;
+    let cancelled = false;
+    const fallbackTimeout = setTimeout(() => {
+      if (!hasWsTradesRef.current && !cancelled) {
+        fetchTradesFromApi();
+      }
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(fallbackTimeout);
+    };
+  }, [fetchTradesFromApi, filters.timeRange]);
+
   const parseTradeTimestamp = (time?: string) => {
     if (!time) return NaN;
     const numeric = Number(time);
@@ -241,8 +651,11 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
 
   useEffect(() => {
     if (!onAvailableTokens) return;
-    onAvailableTokens(tokenOptionsFromTrades);
-  }, [onAvailableTokens, tokenOptionsFromTrades]);
+    const options = allTokenOptions.length
+      ? allTokenOptions
+      : tokenOptionsFromTrades;
+    onAvailableTokens(options);
+  }, [onAvailableTokens, tokenOptionsFromTrades, allTokenOptions]);
 
 
 

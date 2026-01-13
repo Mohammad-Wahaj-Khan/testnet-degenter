@@ -32,8 +32,8 @@ const API_KEY =
 const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};
 const WS_URL = "wss://public-zigchain-testnet-rpc.numia.xyz/websocket";
 const NATIVE_DENOM = "uzig";
-const CANDLE_UP_COLOR = "#20D87C";
-const CANDLE_DOWN_COLOR = "#F64F39";
+const CANDLE_UP_COLOR = "#089981";
+const CANDLE_DOWN_COLOR = "#f23645";
 
 function fetchApi(url: string, init: RequestInit = {}) {
   return fetch(url, {
@@ -1170,7 +1170,7 @@ export default function TradingChart({
           {
             // 'text' shape with these specific overrides creates the circular badge look
             shape: "text",
-            text: ` ${isBuy ? "B" : "S"} `,
+            text: isBuy ? "B" : "S",
             lock: true,
             disableSelection: true,
             disableSave: true,
@@ -1180,11 +1180,11 @@ export default function TradingChart({
               backgroundColor: themeColor,
               backgroundTransparency: 0,
               color: "#ffffff",
-              fontsize: 16,
+              fontsize: 8,
               bold: true,
               borderVisible: true,
               borderColor: themeColor,
-              borderWidth: 4,
+              borderWidth: 200,
               drawBorder: true,
               fixedSize: true,
               showInObjectsTree: false,

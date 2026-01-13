@@ -18,7 +18,7 @@ export default function Home() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<AnalyzerTabId>(analyzerTabs[0].id);
   const [tradingTimeframe, setTradingTimeframe] =
-    useState<TradingTimeframe>("24h");
+    useState<TradingTimeframe>("1M");
   const showTradingContent = activeTab === "trading";
   const [isAnimationReady, setIsAnimationReady] = useState(false);
   const addressOverride = searchParams.get("address")?.trim() || "";

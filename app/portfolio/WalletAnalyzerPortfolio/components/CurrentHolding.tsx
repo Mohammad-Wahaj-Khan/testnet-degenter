@@ -83,7 +83,7 @@ const fetchFromEndpoints = async (
 };
 
 
-const formatCurrencyValue = (value?: number) => {
+const formatUsdValue = (value?: number) => {
   if (value == null || !Number.isFinite(value)) return "—";
   return new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -93,12 +93,21 @@ const formatCurrencyValue = (value?: number) => {
   }).format(value);
 };
 
+const formatZigValue = (value?: number) => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const formatted = new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 6,
+    minimumFractionDigits: 6,
+  }).format(value);
+  return `${formatted} ZIG`;
+};
+
 
 const formatBalanceValue = (value: number) => {
   if (!Number.isFinite(value)) return "0";
   if (Math.abs(value) >= 1000) {
     return new Intl.NumberFormat(undefined, {
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 6,
       minimumFractionDigits: 0,
     }).format(value);
   }
@@ -235,7 +244,7 @@ const TokenRow = ({ data }: { data: TokenData }) => {
 
       <div className="flex flex-col gap-1">
         <span className="md:hidden text-[10px] uppercase tracking-[0.4em] text-gray-500">
-          Price
+          Price (USD)
         </span>
         <span className="text-gray-200 font-medium text-sm">{data.price}</span>
       </div>
@@ -253,7 +262,7 @@ const TokenRow = ({ data }: { data: TokenData }) => {
 
       <div className="flex flex-col gap-1">
         <span className="md:hidden text-[10px] uppercase tracking-[0.4em] text-gray-500">
-          USD Value
+          ZIG Value
         </span>
         <span className="text-gray-200 font-medium text-sm">
           {data.usdValue}
@@ -341,9 +350,9 @@ export default function CurrentHolding({ addressOverride }: CurrentHoldingProps)
               addressShort: shortenDenom(denom),
               copyValue: denom,
               timeAgo: timeAgoLabel,
-              price: priceUsd > 0 ? formatCurrencyValue(priceUsd) : "—",
+              price: priceUsd > 0 ? formatUsdValue(priceUsd) : "—",
               balance: formatBalanceValue(balance),
-              usdValue: usdValue > 0 ? formatCurrencyValue(usdValue) : "—",
+              usdValue: usdValue > 0 ? formatZigValue(usdValue) : "—",
               iconColor: deriveIconColor(displayName || denom),
               iconUri,
               sortValue: usdValue,
@@ -433,9 +442,9 @@ export default function CurrentHolding({ addressOverride }: CurrentHoldingProps)
         <div className="hidden md:block overflow-x-auto no-scrollbar">
           <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr] px-4 md:px-6 py-4 relative border-b border-white/20 bg-[#000000]/50 text-gray-400 text-xs font-semibold uppercase tracking-wider relative z-10">
             <div>Tokens</div>
-            <div>Price</div>
+            <div>Price (USD)</div>
             <div>Balance</div>
-            <div>USD Value</div>
+            <div>ZIG Value</div>
           </div>
         </div>
 

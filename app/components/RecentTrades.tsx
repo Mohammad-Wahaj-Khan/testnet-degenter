@@ -10,10 +10,12 @@ import {
   ChevronRight,
   ChevronDown,
   Filter,
+  Search,
   X,
 } from "lucide-react";
 import explorer from "../../public/explorer.png";
 import { API_BASE_URL } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 const API_BASE = API_BASE_URL;
 const API_KEY =
@@ -276,6 +278,7 @@ const RecentTrades: React.FC<RecentTradesProps> = ({
   filteredSigner,
   onSignerFilterChange,
 }) => {
+  const router = useRouter();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -396,6 +399,17 @@ const RecentTrades: React.FC<RecentTradesProps> = ({
       }
     },
     [appliedAddressFilter, filteredSigner, onSignerFilterChange, summarizeSigner]
+  );
+
+  const handleWalletNavigate = useCallback(
+    (address: string) => {
+      const trimmed = address.trim();
+      if (!trimmed) return;
+      router.push(
+        `/portfolio?address=${encodeURIComponent(trimmed)}`
+      );
+    },
+    [router]
   );
 
   useEffect(() => {
@@ -1168,25 +1182,38 @@ const parseTradesFromStreamMessage = async (
               shortAddress
             )}
             {trade.signer && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  toggleAddressFilter(trade.signer);
-                }}
-                className="p-1 rounded-full bg-white/5 hover:bg-white/20"
-                aria-label={
-                  appliedAddressFilter === trade.signer
-                    ? "Clear signer filter"
-                    : "Filter by signer"
-                }
-              >
-                {appliedAddressFilter === trade.signer ? (
-                  <X className="w-3 h-3 text-white" />
-                ) : (
-                  <Filter className="w-3 h-3 text-gray-200" />
-                )}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleWalletNavigate(trade.signer);
+                  }}
+                  className="p-1 rounded-full bg-white/5 hover:bg-white/20"
+                  aria-label="Search wallet"
+                >
+                  <Search className="w-3 h-3 text-gray-200" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleAddressFilter(trade.signer);
+                  }}
+                  className="p-1 rounded-full bg-white/5 hover:bg-white/20"
+                  aria-label={
+                    appliedAddressFilter === trade.signer
+                      ? "Clear signer filter"
+                      : "Filter by signer"
+                  }
+                >
+                  {appliedAddressFilter === trade.signer ? (
+                    <X className="w-3 h-3 text-white" />
+                  ) : (
+                    <Filter className="w-3 h-3 text-gray-200" />
+                  )}
+                </button>
+              </>
             )}
           </div>
         </td>
@@ -1316,7 +1343,10 @@ const parseTradesFromStreamMessage = async (
               <td className="px-4 py-2 text-left text-gray-400">Amount</td>
               <td className="px-4 py-2">
                 <div className="flex items-center gap-1 text-gray-400">
-                  <span className="text-xs">By address</span>
+                  <span className="flex items-center gap-1 text-xs">
+                    By address
+                    <Search className="h-3 w-3 text-gray-500" />
+                  </span>
                   {/* <Filter className="w-4 h-4 text-gray-500" />
                   {appliedAddressFilter && (
                     <>
