@@ -680,11 +680,11 @@ const parseTradesFromStreamMessage = async (
   // WebSocket setup with proper connection handling
   useEffect(() => {
     if (!poolId) {
-      console.log("No pool ID available yet");
+      // console.log("No pool ID available yet");
       return;
     }
 
-    console.log("Setting up WebSocket for pool:", poolId);
+    // console.log("Setting up WebSocket for pool:", poolId);
     
     const connectWebSocket = () => {
       try {
@@ -698,7 +698,7 @@ const parseTradesFromStreamMessage = async (
         wsRef.current = ws;
 
         ws.onopen = () => {
-          console.log("✅ WebSocket connected successfully");
+          // console.log("✅ WebSocket connected successfully");
           setWsConnected(true);
           reconnectAttemptsRef.current = 0;
           
@@ -708,24 +708,24 @@ const parseTradesFromStreamMessage = async (
             stream: "trades",
             pool_id: poolId
           };
-          console.log("📤 Sending subscription:", subscribeMessage);
+          // console.log("📤 Sending subscription:", subscribeMessage);
           ws.send(JSON.stringify(subscribeMessage));
         };
 
         ws.onmessage = async (event) => {
           try {
-            console.log("📨 Received WebSocket message:", event.data);
+            // console.log("📨 Received WebSocket message:", event.data);
             const msg = JSON.parse(event.data);
             
             const { trades: tradesFromMessage, isSnapshot } =
               await parseTradesFromStreamMessage(msg);
             
             if (!tradesFromMessage.length) {
-              console.log("No trades parsed from message");
+              // console.log("No trades parsed from message");
               return;
             }
 
-            console.log(`✨ Parsed ${tradesFromMessage.length} trades (snapshot: ${isSnapshot})`);
+            // console.log(`✨ Parsed ${tradesFromMessage.length} trades (snapshot: ${isSnapshot})`);
 
             setTrades((prev) => {
               if (isSnapshot) {
@@ -759,14 +759,14 @@ const parseTradesFromStreamMessage = async (
         };
 
         ws.onclose = (event) => {
-          console.log("🔌 WebSocket closed:", event.code, event.reason);
+          // console.log("🔌 WebSocket closed:", event.code, event.reason);
           setWsConnected(false);
           wsRef.current = null;
 
           // Attempt to reconnect with exponential backoff
           if (reconnectAttemptsRef.current < 5) {
             const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-            console.log(`🔄 Reconnecting in ${delay}ms...`);
+            // console.log(`🔄 Reconnecting in ${delay}ms...`);
             reconnectAttemptsRef.current++;
             
             reconnectTimeoutRef.current = setTimeout(() => {
@@ -784,7 +784,7 @@ const parseTradesFromStreamMessage = async (
     connectWebSocket();
 
     return () => {
-      console.log("🧹 Cleaning up WebSocket connection");
+      // console.log("🧹 Cleaning up WebSocket connection");
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
@@ -868,7 +868,7 @@ const parseTradesFromStreamMessage = async (
         );
 
         if (poolIdValue) {
-          console.log("🎯 Found pool id:", poolIdValue);
+          // console.log("🎯 Found pool id:", poolIdValue);
           setPoolId(poolIdValue);
         } else {
           console.error("❌ No pool id found in pool data");
@@ -916,7 +916,7 @@ const parseTradesFromStreamMessage = async (
         if (!cancelled) {
           setSymbolMap(map);
           setTokenImageMap(imageMap);
-          console.log("✅ Loaded token icons:", Object.keys(imageMap).length);
+          // console.log("✅ Loaded token icons:", Object.keys(imageMap).length);
         }
       } catch (error) {
         console.error("❌ Error fetching token icons:", error);

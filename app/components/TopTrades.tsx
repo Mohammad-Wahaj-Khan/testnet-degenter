@@ -151,14 +151,14 @@ export default function TopTrades({ tokenId }: TopTradesProps) {
 
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      console.log(
-        "Fetching trades from",
-        sevenDaysAgo.toISOString(),
-        "to",
-        now.toISOString(),
-        "URL:",
-        `${API_BASE}/trades/token/${tokenId}?unit=zig&limit=${MAX_LIMIT}&startTime=${sevenDaysAgo.toISOString()}&endTime=${now.toISOString()}&tf=7d&sort=valueUsd:desc`
-      );
+      // console.log(
+      //   "Fetching trades from",
+      //   sevenDaysAgo.toISOString(),
+      //   "to",
+      //   now.toISOString(),
+      //   "URL:",
+      //   `${API_BASE}/trades/token/${tokenId}?unit=zig&limit=${MAX_LIMIT}&startTime=${sevenDaysAgo.toISOString()}&endTime=${now.toISOString()}&tf=7d&sort=valueUsd:desc`
+      // );
 
       // Fetch top trades by value from 7 days
       const res = await fetch(

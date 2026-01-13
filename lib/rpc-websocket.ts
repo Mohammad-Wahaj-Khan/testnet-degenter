@@ -93,7 +93,7 @@ export class RPCWebSocketClient {
       return;
     }
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts++);
-    console.log(`[RPC WS] reconnecting in ${delay}ms...`);
+    // console.log(`[RPC WS] reconnecting in ${delay}ms...`);
     this.reconnectTimer = setTimeout(() => this.connect(), delay);
   }
 
