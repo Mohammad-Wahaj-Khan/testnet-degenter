@@ -21,12 +21,13 @@ import type {
 } from "@/lib/limitorder/types";
 import { DEFAULT_BALANCE_DENOM } from "@/lib/twap/constants";
 import { toRawAmount, isValidDisplayAmount } from "@/lib/twap/tokenAmount";
+import { API_BASE_URL } from "@/lib/api";
 
 const EXPLORER_BASE_URL = "https://testnet.zigscan.org/tx/";
 const GAS_PRICE = 0.0025;
 const CREATE_GAS_LIMIT = 350000;
 const CANCEL_GAS_LIMIT = 260000;
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 const RPC_URL =
   process.env.RPC_URL_DEGENTER ||
   "https://public-zigchain-testnet-rpc.numia.xyz";

@@ -11,6 +11,7 @@ import {
 import Image from "next/image";
 import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "@/app/config/chain";
+import { API_BASE_URL } from "@/lib/api";
 
 // Types
 interface Swap {
@@ -25,10 +26,16 @@ interface Swap {
   valueUsd: number;
 }
 
-const ACTIVITY_API_BASE =
+const normalizeWalletApiBase = (value?: string) => {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed || /undefined|null/i.test(trimmed)) return API_BASE_URL;
+  return trimmed;
+};
+
+const ACTIVITY_API_BASE = normalizeWalletApiBase(
   process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API ??
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  "http://82.208.20.12:8004";
+    process.env.NEXT_PUBLIC_API_BASE_URL
+);
 const FALLBACK_TOKEN_IMAGE = "/zigicon.png";
 
 type WalletAnalyzerActivitiesProps = {

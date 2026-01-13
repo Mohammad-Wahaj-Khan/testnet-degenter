@@ -2,13 +2,13 @@
 
 import { useState, useMemo, useEffect } from "react";
 import useSWR from "swr";
-import { tokenAPI } from "@/lib/api";
+import { tokenAPI, API_BASE_URL } from "@/lib/api";
 import AddLeft from "./add-left";
 import AllSpcPairs from "./AllSpcPairs";
 import { useChain } from "@cosmos-kit/react";
 import dynamic from "next/dynamic";
 import { ArrowRightLeft, ChevronDown, Stars, Lock } from "lucide-react";
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 const API_KEY =
   process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
 const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};
@@ -349,7 +349,7 @@ export default function SwapPanel({ params }: { params: { token: string } }) {
               //   priceInZigPerToken={token.priceInZigPerToken}
               // />
               <SwapInterface
-                apiBase={API_BASE || "http://82.208.20.12:8004"}
+                apiBase={API_BASE || "https://testnet-api.degenter.io"}
                 tokenSymbol={token.symbol} // "HELLO"
                 tokenDenom={token.pairContract} // "coin.zig1... .uzm"  ✅ not the symbol
                 tokenDecimals={token.exponent} // 6

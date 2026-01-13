@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ChevronFirst, ChevronRight } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 const MAX_TRADES = 15;
 const MAX_LIMIT = 1000;
 

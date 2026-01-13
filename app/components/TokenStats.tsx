@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 
 interface TokenData {
   token?: {
@@ -57,8 +58,7 @@ export default function TokenStats({
   const [showMoreInfo, setShowMoreInfo] = useState(false);
 
   const fetchData = async (isPolling = false) => {
-    const fetchTarget =
-      tokenKey || (tokenId != null ? String(tokenId) : null);
+    const fetchTarget = tokenKey?.trim() || null;
     if (!fetchTarget) return;
 
     try {
@@ -77,7 +77,6 @@ export default function TokenStats({
       const json = await res.json();
       if (json?.success && json?.data) {
         setData(json.data);
-        setLastUpdated(new Date());
       } else {
         setData(null);
       }
@@ -103,13 +102,7 @@ export default function TokenStats({
   // Initial fetch and set up polling (fallback)
   useEffect(() => {
     if (!summaryData) fetchData();
-
-    const intervalId = setInterval(() => {
-      if (!summaryData) fetchData(true);
-    }, 30000); // Refresh every 10 seconds
-
-    return () => clearInterval(intervalId);
-  }, [tokenId, tokenKey, summaryData]);
+  }, [tokenKey, summaryData]);
 
   const handleReload = () => {
     fetchData();
@@ -124,9 +117,16 @@ export default function TokenStats({
   }
 
   if (!data) {
+    if (!tokenKey) {
+      return (
+        <div className="bg-black/50 border border-gray-700 rounded-lg p-6 text-center text-gray-400">
+          Waiting for token details...
+        </div>
+      );
+    }
     return (
       <div className="bg-black/50 border border-gray-700 rounded-lg p-6 text-center text-red-400">
-        No data found for token: {tokenId}
+        No data found for token: {tokenKey || tokenId}
       </div>
     );
   }
@@ -478,7 +478,3 @@ export default function TokenStats({
     </div>
   );
 }
-function setLastUpdated(arg0: Date) {
-  throw new Error("Function not implemented.");
-}
-

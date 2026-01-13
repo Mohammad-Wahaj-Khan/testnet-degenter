@@ -1,6 +1,6 @@
 // API Configuration
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://82.208.20.12:8004";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "";
 const API_KEY =
   process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
 

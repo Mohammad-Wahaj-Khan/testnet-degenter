@@ -9,15 +9,16 @@ import TokenStats from "./TokenStats";
 import { Link } from "lucide-react";
 import Image from "next/image";
 import { useTokenSummary } from "@/app/hooks/useTokenSummary";
-import { tokenAPI, type TokenDetailResponse } from "@/lib/api";
+import { tokenAPI, type TokenDetailResponse, API_BASE_URL } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 
 /* ---------------- Types ---------------- */
 interface Token {
   id: number;
   name: string;
   symbol: string;
+  display?: string;
   description: string;
   icon: string | null;
   twitter?: string | null;
@@ -41,6 +42,9 @@ interface Token {
 }
 
 /* ---------------- Helpers ---------------- */
+const isNumericTokenKey = (value?: string | null) =>
+  Boolean(value && /^[0-9]+$/.test(value));
+
 const findIbcMeta = async (denom: string) => {
   try {
     const res = await fetch(`${API_BASE}/tokens/swap-list?bucket=24h&unit=usd`);
@@ -60,6 +64,28 @@ const findIbcMeta = async (denom: string) => {
       : null;
   } catch (err) {
     console.error("Error fetching IBC meta:", err);
+    return null;
+  }
+};
+
+const resolveTokenKeyFromId = async (tokenId: string) => {
+  try {
+    const res = await fetch(`${API_BASE}/tokens/swap-list?bucket=24h&unit=usd`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const match =
+      json?.data?.find(
+        (t: { tokenId?: string | number }) =>
+          String(t?.tokenId ?? "") === String(tokenId)
+      ) || null;
+    if (!match) return null;
+    return (match.symbol ||
+      match.denom ||
+      match.display ||
+      match.name ||
+      null) as string | null;
+  } catch (err) {
+    console.error("Error resolving token by id:", err);
     return null;
   }
 };
@@ -84,7 +110,7 @@ async function fetchTokenBySymbol(symbol: string): Promise<Token | null> {
       return null;
     }
 
-    const t = json.data;
+    const t = json.data.token;
     if (!t) {
       console.error("No data in API response");
       return null;
@@ -97,6 +123,7 @@ async function fetchTokenBySymbol(symbol: string): Promise<Token | null> {
 
     let derivedSymbol = t.symbol || "";
     let derivedIcon = t.imageUri || null;
+    const display = t.display || t.denom || symbol;
 
     if (symbol.toLowerCase().startsWith("ibc/")) {
       const ibcMeta = await findIbcMeta(symbol);
@@ -112,7 +139,9 @@ async function fetchTokenBySymbol(symbol: string): Promise<Token | null> {
       id: Number(t.tokenId || 0),
       name: t.name || "Unknown",
       symbol: derivedSymbol,
-      description: t.description || "",
+      display,
+      description:
+        t.description || t.name || "Hello everyone! This is a Degenter token.",
       icon: derivedIcon,
       twitter: twitterUrl,
       telegram: t.telegram || null,
@@ -159,12 +188,15 @@ export default function AddLeft() {
   const { tokenDetails } = useParams();
   const [token, setToken] = useState<Token | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resolvedTokenKey, setResolvedTokenKey] = useState<string | null>(null);
   const [summaryFallback, setSummaryFallback] =
     useState<TokenDetailResponse["data"] | null>(null);
   const tokenKey = Array.isArray(tokenDetails) ? tokenDetails[0] : tokenDetails;
+  const summaryTokenKey =
+    token?.symbol || token?.display || resolvedTokenKey || tokenKey;
   const { data: summaryData } = useTokenSummary({
     tokenId: token?.id,
-    tokenKey,
+    tokenKey: summaryTokenKey,
   });
   const summary = summaryData ?? summaryFallback;
 
@@ -191,14 +223,41 @@ export default function AddLeft() {
       : "text-gray-300";
 
   useEffect(() => {
+    if (!tokenKey) {
+      setResolvedTokenKey(null);
+      return;
+    }
+
+    if (!isNumericTokenKey(tokenKey)) {
+      setResolvedTokenKey(tokenKey);
+      return;
+    }
+
+    let active = true;
+    resolveTokenKeyFromId(tokenKey)
+      .then((resolved) => {
+        if (!active) return;
+        setResolvedTokenKey(resolved || tokenKey);
+      })
+      .catch(() => {
+        if (!active) return;
+        setResolvedTokenKey(tokenKey);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [tokenKey]);
+
+  useEffect(() => {
     if (!tokenDetails) return;
-    if (!tokenKey) return;
+    if (!summaryTokenKey) return;
 
     const loadToken = async () => {
       setLoading(true);
       setError(null);
       try {
-        const t = await fetchTokenBySymbol(tokenKey);
+        const t = await fetchTokenBySymbol(summaryTokenKey);
         if (!t) {
           setError("Token not found");
         }
@@ -212,14 +271,14 @@ export default function AddLeft() {
     };
 
     loadToken();
-  }, [tokenDetails, tokenKey]);
+  }, [tokenDetails, summaryTokenKey]);
 
   useEffect(() => {
-    if (!tokenKey || summaryData) return;
+    if (!summaryTokenKey || summaryData) return;
     setSummaryFallback(null);
     let active = true;
     tokenAPI
-      .getTokenDetailsBySymbol(tokenKey, "best", true)
+      .getTokenDetailsBySymbol(summaryTokenKey, "best", true)
       .then((res) => {
         if (!active) return;
         if (res?.data) setSummaryFallback(res.data);
@@ -230,7 +289,7 @@ export default function AddLeft() {
     return () => {
       active = false;
     };
-  }, [tokenKey, summaryData]);
+  }, [summaryTokenKey, summaryData]);
 
   /* ---------------- UI ---------------- */
   return (
@@ -268,7 +327,8 @@ export default function AddLeft() {
               <div>
                 <div className="flex items-center gap-1">
                   <h2 className="text-lg font-bold text-white">
-                    {token.socials.twitter.name || token.name}
+                    {/* {token.socials.twitter.name || token.name} */}
+                    {token.name}
                   </h2>
                   {token.socials.twitter.isBlueVerified && (
                     <svg
@@ -391,36 +451,13 @@ export default function AddLeft() {
         </div>
       )}
 
-      {/* ✅ Live price row */}
-      {summary && (
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm text-white">
-          <div className="bg-black/40 rounded-lg py-2">
-            <div className="text-xs text-gray-400">Price</div>
-            <div className="font-medium">
-              {priceUsd != null && Number.isFinite(priceUsd)
-                ? `$${priceUsd.toPrecision(6)}`
-                : "—"}
-            </div>
-          </div>
-          <div className="bg-black/40 rounded-lg py-2">
-            <div className="text-xs text-gray-400">24h</div>
-            <div className={`font-medium ${changeClass}`}>{changeLabel}</div>
-          </div>
-          <div className="bg-black/40 rounded-lg py-2">
-            <div className="text-xs text-gray-400">MCap</div>
-            <div className="font-medium">
-              {formatCompact(summary.mcapDetail?.usd ?? summary.mc, "$")}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ✅ Token Stats Section */}
       <div className="mt-3">
         {token ? (
           <TokenStats
             tokenId={token.id}
-            tokenKey={tokenKey}
+            tokenKey={summaryTokenKey}
             summaryData={summary}
           />
         ) : loading ? (

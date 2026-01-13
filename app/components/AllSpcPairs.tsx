@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL  ;
+import { API_BASE_URL } from "@/lib/api";
+const API_BASE = API_BASE_URL;
 
 export default function AllSpcPairs() {
   const [open, setOpen] = useState(true);

@@ -7,11 +7,22 @@ import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../../../config/chain";
 
 
-const HOLDINGS_API_ENDPOINTS = Array.from(
+const RPC_ENDPOINTS = Array.from(
   new Set([
-    process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API ?? "http://82.208.20.12:8004",
+    process.env.RPC_URL_DEGENTER ??
+      "https://rpc.zigscan.net",
+    "https://public-zigchain-testnet-rpc.numia.xyz",
   ])
 );
+const LCD_ENDPOINTS = Array.from(
+  new Set([
+    process.env.LCD_URL_DEGENTER ?? "https://api.zigscan.net",
+    "https://public-zigchain-testnet-lcd.numia.xyz",
+  ])
+);
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const TOKEN_LIST_LIMIT = 100;
 
 
 const COLOR_PALETTE = [
@@ -27,6 +38,17 @@ const COLOR_PALETTE = [
 ];
 
 
+type DenomMetadata = {
+  base?: string;
+  name?: string;
+  symbol?: string;
+  display?: string;
+  description?: string;
+  denom_units?: Array<{ denom: string; exponent: number }>;
+  logo_URIs?: Record<string, string>;
+};
+
+
 const safeNumber = (value: unknown): number => {
   if (typeof value === "number") return value;
   if (typeof value === "string") {
@@ -34,6 +56,27 @@ const safeNumber = (value: unknown): number => {
     return Number.isFinite(parsed) ? parsed : 0;
   }
   return 0;
+};
+
+
+const extractMetadataList = (payload: unknown): DenomMetadata[] => {
+  if (!payload || typeof payload !== "object") return [];
+  const candidate = payload as any;
+  if (Array.isArray(candidate.metadatas)) return candidate.metadatas;
+  if (Array.isArray(candidate.metadata)) return candidate.metadata;
+  if (Array.isArray(candidate.denom_metadata)) return candidate.denom_metadata;
+  if (Array.isArray(candidate.data)) return candidate.data;
+  return [];
+};
+
+
+const extractTokenList = (payload: unknown): any[] => {
+  if (!payload || typeof payload !== "object") return [];
+  if (Array.isArray(payload)) return payload;
+  const candidate = payload as any;
+  if (Array.isArray(candidate.data)) return candidate.data;
+  if (Array.isArray(candidate.tokens)) return candidate.tokens;
+  return [];
 };
 
 
@@ -75,6 +118,36 @@ const fetchFromEndpoints = async (
       ? `Unable to load ${label} (${lastError})`
       : `Unable to load ${label}`
   );
+};
+
+
+const findPreferredDenomUnitExponent = (
+  units?: Array<{ denom?: string; exponent: number }>,
+  _display?: string,
+  _symbol?: string
+): number | undefined => {
+  if (!units?.length) return undefined;
+  const maxExponent = units.reduce((max, unit) => {
+    const exponent = typeof unit?.exponent === "number" ? unit.exponent : max;
+    return exponent > max ? exponent : max;
+  }, 0);
+  return Number.isFinite(maxExponent) ? maxExponent : undefined;
+};
+
+
+const getTokenEntryDecimals = (token?: any): number | undefined => {
+  if (!token) return undefined;
+  if (Array.isArray(token?.denom_units)) {
+    const fromUnits = findPreferredDenomUnitExponent(
+      token.denom_units,
+      token.display,
+      token.symbol
+    );
+    if (fromUnits != null) return fromUnits;
+  }
+  const numeric = safeNumber(token?.decimals ?? token?.exponent);
+  if (Number.isFinite(numeric) && numeric >= 0) return numeric;
+  return undefined;
 };
 
 
@@ -125,12 +198,73 @@ const formatTimeAgo = (elapsedMs: number) => {
 };
 
 
+const guessSymbolFromDenom = (denom: string) => {
+  if (!denom) return "UNKNOWN";
+  const cleaned = denom.toUpperCase();
+  if (cleaned.startsWith("IBC/")) {
+    return cleaned.slice(4, 10);
+  }
+  if (cleaned.includes("/")) {
+    const parts = cleaned.split("/");
+    return parts[parts.length - 1] || cleaned;
+  }
+  return cleaned;
+};
+
 const formatTokenName = (name: string) => {
   if (!name) return "";
   if (!name.includes(".")) return name;
   const parts = name.split(".");
   const lastPart = parts[parts.length - 1];
   return lastPart ? lastPart.toUpperCase() : name;
+};
+
+
+interface PriceEntry {
+  symbol: string;
+  priceUsd: number;
+  imageUri?: string;
+  decimals?: number;
+}
+
+
+const determineDecimals = (
+  denom?: string,
+  metadata?: DenomMetadata,
+  priceEntry?: PriceEntry
+) => {
+  // Handle specific tokens with known decimal places
+  if (
+    denom?.toLowerCase().includes("eth") ||
+    priceEntry?.symbol?.toLowerCase() === "eth"
+  ) {
+    return 18; // ETH has 18 decimals
+  }
+  if (
+    denom?.toLowerCase().includes("neiro") ||
+    priceEntry?.symbol?.toLowerCase() === "neiro"
+  ) {
+    return 9; // NEIRO has 6 decimals
+  }
+
+
+  const metadataExponent =
+    metadata && Array.isArray(metadata.denom_units)
+      ? findPreferredDenomUnitExponent(
+          metadata.denom_units,
+          metadata.display,
+          metadata.symbol
+        )
+      : undefined;
+  const priceExponent = priceEntry?.decimals;
+
+
+  if (denom?.toLowerCase().startsWith("ibc/")) {
+    if (priceExponent != null) return priceExponent;
+  }
+  if (metadataExponent != null) return metadataExponent;
+  if (priceExponent != null) return priceExponent;
+  return 6; // Default to 6 decimals for other tokens
 };
 
 
@@ -291,61 +425,187 @@ export default function CurrentHolding({ addressOverride }: CurrentHoldingProps)
 
 
       try {
-        const holdingsPayload = await fetchFromEndpoints(
-          HOLDINGS_API_ENDPOINTS,
-          `wallets/${encodeURIComponent(address)}/portfolio/holdings`,
+        const metadataPromise = fetchFromEndpoints(
+          LCD_ENDPOINTS,
+          "cosmos/bank/v1beta1/denoms_metadata?pagination.limit=1000",
           {
             cache: "no-store",
             signal: controller.signal,
             headers: { Accept: "application/json" },
           },
-          "wallet holdings"
+          "denom metadata"
         );
 
-        const items = Array.isArray(holdingsPayload?.items)
-          ? holdingsPayload.items
+
+        const pricePromise = fetch(
+          `${API_BASE}/tokens?bucket=24h&priceSource=best&dir=desc&includeChange=1&limit=${TOKEN_LIST_LIMIT}&offset=0`,
+          { cache: "no-store", signal: controller.signal }
+        )
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null);
+
+
+        const balanceJson = await fetchFromEndpoints(
+          LCD_ENDPOINTS,
+          `cosmos/bank/v1beta1/balances/${address}?pagination.limit=1000`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+            headers: { Accept: "application/json" },
+          },
+          "wallet balances"
+        );
+        const balances = Array.isArray(balanceJson?.balances)
+          ? balanceJson.balances
           : [];
-        const asOf =
-          typeof holdingsPayload?.as_of === "string"
-            ? Date.parse(holdingsPayload.as_of)
-            : Number.NaN;
-        const timeAgoLabel = formatTimeAgo(
-          Date.now() - (Number.isFinite(asOf) ? asOf : fetchStart)
+
+
+        const metadataPayload = await metadataPromise;
+        const pricePayload = await pricePromise;
+
+
+        const metadataList = extractMetadataList(metadataPayload);
+        const metadataMap = new Map<string, DenomMetadata>();
+        for (const meta of metadataList) {
+          if (meta?.base) {
+            metadataMap.set(meta.base, meta);
+            metadataMap.set(meta.base.toLowerCase(), meta);
+          }
+        }
+
+
+        const tokenEntries = extractTokenList(pricePayload);
+        const zigEntry = tokenEntries.find(
+          (token) =>
+            token?.denom === "uzig" ||
+            token?.symbol?.toLowerCase() === "zig" ||
+            token?.symbol === "ZIG"
+        );
+        const zigPriceUsd = safeNumber(
+          zigEntry?.priceUsd ??
+            zigEntry?.price_usd ??
+            zigEntry?.priceNative ??
+            zigEntry?.price_native
         );
 
-        const prepared = items
+
+        const priceEntriesByKey = new Map<string, PriceEntry>();
+        const registerPriceEntry = (key?: string, value?: PriceEntry) => {
+          if (!key || !value) return;
+          priceEntriesByKey.set(key.toLowerCase(), value);
+        };
+        for (const token of tokenEntries) {
+          const rawKey =
+            token?.denom ??
+            token?.tokenId ??
+            token?.symbol ??
+            token?.symbol?.toLowerCase();
+          if (!rawKey) continue;
+          const denomKey = rawKey.toString();
+          const rawUsd = safeNumber(token?.priceUsd ?? token?.price_usd);
+          const nativePrice = safeNumber(
+            token?.priceNative ?? token?.price_native
+          );
+          const derivedUsd =
+            rawUsd > 0
+              ? rawUsd
+              : nativePrice > 0 && zigPriceUsd > 0
+              ? nativePrice * zigPriceUsd
+              : 0;
+          const symbol =
+            token?.symbol ?? token?.name ?? guessSymbolFromDenom(denomKey);
+          const normalizedImage =
+            token?.imageUri ??
+            token?.imageURI ??
+            token?.icon ??
+            token?.logoURI ??
+            token?.logo_URIs?.png ??
+            token?.logo_URIs?.logo ??
+            token?.logo_URIs?.symbol;
+          const entryDecimals = getTokenEntryDecimals(token);
+          const entry: PriceEntry = {
+            symbol,
+            priceUsd: derivedUsd,
+            imageUri: normalizedImage,
+            decimals: entryDecimals,
+          };
+          registerPriceEntry(denomKey, entry);
+          registerPriceEntry(token?.symbol?.toLowerCase(), entry);
+          registerPriceEntry(token?.tokenId, entry);
+          registerPriceEntry(token?.name, entry);
+        }
+
+
+        const resolvePriceEntry = (denom: string, metadata?: DenomMetadata) => {
+          const normalized = denom.toLowerCase();
+          const direct = priceEntriesByKey.get(normalized);
+          if (direct) return direct;
+          if (denom.startsWith("ibc/")) {
+            const alternate =
+              metadata?.symbol ?? metadata?.display ?? metadata?.name;
+            if (alternate) {
+              return priceEntriesByKey.get(alternate.toLowerCase());
+            }
+          }
+          return undefined;
+        };
+
+
+        const timeAgoLabel = formatTimeAgo(Date.now() - fetchStart);
+
+
+        const prepared = balances
           .map((entry: any): TokenDataWithSort | null => {
-            const token = entry?.token ?? {};
-            const denom =
-              token?.denom ??
-              token?.token_id ??
-              token?.tokenId ??
-              token?.symbol ??
-              "unknown";
-            const symbol = token?.symbol ?? denom;
+            if (!entry?.denom || !entry?.amount) return null;
+            const amount = safeNumber(entry.amount);
+            if (amount <= 0) return null;
+            const metadata = metadataMap.get(entry.denom.toLowerCase());
+            const priceEntry = resolvePriceEntry(entry.denom, metadata);
+            const decimals =
+              determineDecimals(entry.denom, metadata, priceEntry) || 0;
+            const normalizedDenom = entry.denom.toLowerCase();
+            const divisor =
+              normalizedDenom === "uzig"
+                ? 1_000_000
+                : decimals === 6
+                ? 1_000_000
+                : Math.pow(10, decimals);
+            const humanAmount = amount / divisor;
+            if (!Number.isFinite(humanAmount) || humanAmount <= 0) return null;
+            const symbol =
+              priceEntry?.symbol ??
+              metadata?.display ??
+              metadata?.name ??
+              metadata?.symbol ??
+              guessSymbolFromDenom(entry.denom);
             const displayName = formatTokenName(symbol);
-            const balance = safeNumber(entry?.balance);
-            if (balance <= 0) return null;
-            const priceUsd = safeNumber(entry?.price_usd ?? entry?.priceUsd);
-            const usdValue = safeNumber(entry?.value_usd ?? entry?.valueUsd);
+            const priceUsd = priceEntry?.priceUsd ?? 0;
+            const usdValue = priceUsd > 0 ? priceUsd * humanAmount : 0;
             const iconUri =
-              token?.image ?? token?.imageUri ?? token?.imageURI;
+              priceEntry?.imageUri ??
+              metadata?.logo_URIs?.png ??
+              metadata?.logo_URIs?.logo ??
+              metadata?.logo_URIs?.symbol;
             return {
-              id: denom,
-              name: displayName || denom,
-              addressShort: shortenDenom(denom),
-              copyValue: denom,
+              id: entry.denom,
+              name: displayName,
+              addressShort: shortenDenom(entry.denom),
+              copyValue: entry.denom,
               timeAgo: timeAgoLabel,
               price: priceUsd > 0 ? formatCurrencyValue(priceUsd) : "—",
-              balance: formatBalanceValue(balance),
-              usdValue: usdValue > 0 ? formatCurrencyValue(usdValue) : "—",
-              iconColor: deriveIconColor(displayName || denom),
+              balance: formatBalanceValue(humanAmount),
+              usdValue: priceUsd > 0 ? formatCurrencyValue(usdValue) : "—",
+              iconColor: deriveIconColor(displayName),
               iconUri,
               sortValue: usdValue,
             };
           })
           .filter((item: any): item is TokenDataWithSort => Boolean(item))
-          .sort((a: { sortValue: number; }, b: { sortValue: number; }) => b.sortValue - a.sortValue);
+          .sort(
+            (a: { sortValue: number }, b: { sortValue: number }) =>
+              b.sortValue - a.sortValue
+          );
+
 
         if (!active) return;
         setHoldings(
@@ -417,7 +677,7 @@ export default function CurrentHolding({ addressOverride }: CurrentHoldingProps)
       <div
         className="my-6 relative z-10 mx-auto w-full rounded-xl overflow-hidden border border-white/20 shadow-[0_20px_80px_rgba(0,0,0,0.8)]"
         style={{
-                backgroundImage: `radial-gradient(circle at 80% 96%, #851400ff, #140401ff 55%), linear-gradient(160deg, #050505 35%, #050505 70%, #020a0b 100%)`,
+          backgroundImage: `radial-gradient(circle at 80% 96%, #851400ff, #140401ff 55%), linear-gradient(160deg, #050505 35%, #050505 70%, #020a0b 100%)`,
           backgroundSize: "cover",
           backgroundRepeat: "no-repeat",
         }}

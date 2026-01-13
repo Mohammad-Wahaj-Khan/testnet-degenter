@@ -5,9 +5,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useTokenSummary } from "@/app/hooks/useTokenSummary";
-import { tokenAPI, type TokenDetailResponse } from "@/lib/api";
+import { tokenAPI, type TokenDetailResponse, API_BASE_URL } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 
 type TabType = "Security" | "Top Holders" | "Recent Trades";
 

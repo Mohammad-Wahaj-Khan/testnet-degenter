@@ -1,6 +1,13 @@
 // app/lib/api.ts
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://82.208.20.12:8004";
+const DEFAULT_BASE_URL = "https://testnet-api.degenter.io";
+const normalizeBaseUrl = (value?: string) => {
+  if (!value) return DEFAULT_BASE_URL;
+  const trimmed = value.trim();
+  if (!trimmed || /undefined|null/i.test(trimmed)) return DEFAULT_BASE_URL;
+  return trimmed.replace(/\/+$/, "");
+};
+const BASE_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL);
+export const API_BASE_URL = BASE_URL;
 const API_KEY =
   process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
 

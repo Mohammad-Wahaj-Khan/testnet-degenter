@@ -7,6 +7,7 @@ import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../../../config/chain";
 import { type TradingTimeframe } from "./WalletAnalyzerBoxes";
 import Profile from "@/public/star.svg";
+import { API_BASE_URL } from "@/lib/api";
 
 type TokenRow = {
   token: string;
@@ -31,10 +32,14 @@ type TokenRow = {
   boughtUsd: number;
 };
 
+const normalizeWalletApiBase = (value?: string) => {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed || /undefined|null/i.test(trimmed)) return API_BASE_URL;
+  return trimmed;
+};
+
 const PNL_API_ENDPOINTS = Array.from(
-  new Set([
-    process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API ?? "http://82.208.20.12:8004",
-  ])
+  new Set([normalizeWalletApiBase(process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API)])
 );
 
 const LOW_VALUE_USD_THRESHOLD = 10;
@@ -205,6 +210,7 @@ export default function WalletAnalyzerTable({
         timeframe === "1M" ? "30d" : (timeframe as string).toLowerCase();
       setLoading(true);
       setError(null);
+      setTokenRows([]);
 
       try {
         const payload = await fetchFromEndpoints(

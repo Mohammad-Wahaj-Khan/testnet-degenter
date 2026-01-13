@@ -47,7 +47,10 @@ interface Trade {
   valueUsd: number;
   class: "whale" | "shark" | "shrimp";
 }
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "https://testnet-api.degenter.io").replace(
+  /\/+$/,
+  ""
+);
 
 const LargeTradersTable: React.FC = () => {
   const [trades, setTrades] = useState<Trade[]>([]);

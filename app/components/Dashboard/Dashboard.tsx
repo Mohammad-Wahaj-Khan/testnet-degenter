@@ -29,6 +29,10 @@ interface Token {
 
 const DASHBOARD_TOP_TOKENS_CACHE_KEY = "degenter_dashboard_top_tokens";
 const DASHBOARD_TOP_TOKENS_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "https://testnet-api.degenter.io").replace(
+  /\/+$/,
+  ""
+);
 
 type DashboardTokensCache = {
   tokens: Token[];
@@ -273,7 +277,7 @@ const Dashboard: React.FC = () => {
 
         // Trades
         const tradesresponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/trades/?tf=24h&unit=usd&limit=5000`,
+          `${API_BASE}/trades/?tf=24h&unit=usd&limit=5000`,
           {
             signal: controller.signal,
             cache: "no-store",

@@ -27,6 +27,7 @@ import type {
   PairType,
 } from "@/schemas/TwapContract.types";
 import { toRawAmount, isValidDisplayAmount } from "@/lib/twap/tokenAmount";
+import { API_BASE_URL } from "@/lib/api";
 
 
 const EXPLORER_BASE_URL = "https://testnet.zigscan.org/tx/";
@@ -37,7 +38,7 @@ const CANCEL_GAS_FALLBACK = 320000;
 const CREATE_BUFFER = 1.18;
 const MULTI_BUFFER = 1.24;
 const CANCEL_BUFFER = 1.15;
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 const RPC_URL =
   process.env.RPC_URL_DEGENTER ||
   "https://public-zigchain-testnet-rpc.numia.xyz";

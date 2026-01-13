@@ -13,8 +13,9 @@ import {
   X,
 } from "lucide-react";
 import explorer from "../../public/explorer.png";
+import { API_BASE_URL } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 const API_KEY =
   process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
 const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};

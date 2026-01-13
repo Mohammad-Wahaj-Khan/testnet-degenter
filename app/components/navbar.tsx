@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, Lock, Menu, Search, X } from "lucide-react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import NewImg from '../../public/newimg.png';
+import NewImg from '../../public/newimgyellow.png';
 
 // Assets (design unchanged)
 import WalletImg from "../../public/wallet.svg";
@@ -21,8 +21,9 @@ const SearchBar = dynamic(() => import("./search-bar"), { ssr: false });
 // ---- CosmosKit (wallet) ----
 import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../config/chain";
+import { API_BASE_URL } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 const PROFILE_FOCUS_SEEN_KEY = "degenterProfileFocusSeen";
 const LEADERBOARD_CLOSED_KEY = "degenterLeaderboardPopupClosed";
 const LEADERBOARD_CLOSED_EVENT = "degenter:leaderboard-closed";
@@ -429,7 +430,7 @@ export default function Navbar() {
             <div className="hidden lg:flex flex-1 justify-center">
               <nav className="flex items-center gap-4 xl:gap-10">
                 <FindTradersNavItem />
-                <NavItem label="Explore" hasDropdown />
+                <ExploreNavItem />
                 <NavItem label="Earn" hasDropdown />
                 <NavItem label="Terminal" hasDropdown />
                 <NavItem label="Resources" hasDropdown />
@@ -438,7 +439,7 @@ export default function Navbar() {
             </div>
 
             <div className="flex items-center gap-3 sm:gap-2 md:gap-3">
-              <div className="relative">
+              {/* <div className="relative">
                 <button
                   ref={profileButtonRef}
                   onClick={handleProfileClick}
@@ -511,7 +512,7 @@ export default function Navbar() {
               <span
                 aria-hidden
                 className="mx-2 sm:mx-1 h-6 sm:h-7 w-[1px] bg-white"
-              />
+              /> */}
               {!address ? (
                 <button
                   onClick={handleWalletClick}
@@ -662,7 +663,7 @@ function FindTradersNavItem({ mobile }: { mobile?: boolean }) {
   const badgeHeight = 18;
   return (
     <Link
-      href="/findtraders"
+      href="/trades"
       rel="noreferrer"
       className={`flex items-center gap-2 ${mobile ? "px-2 py-1" : ""}`}
     >
@@ -671,6 +672,31 @@ function FindTradersNavItem({ mobile }: { mobile?: boolean }) {
         <Image
           src={NewImg}
           alt="New Find Traders badge"
+          width={badgeWidth}
+          height={badgeHeight}
+          className="h-6 w-auto select-none leaderboard-badge"
+          draggable={false}
+          priority
+        />
+      </span>
+    </Link>
+  );
+}
+function ExploreNavItem({ mobile }: { mobile?: boolean }) {
+  const badgeWidth = 35;
+  const badgeHeight = 18;
+  return (
+    <Link
+      href="https://testnet.zigscan.org"
+      target="_blank"
+      rel="noreferrer"
+      className={`flex items-center gap-2 ${mobile ? "px-2 py-1" : ""}`}
+    >
+      <NavItem label="Explore" />
+      <span className="flex-shrink-0">
+        <Image
+          src={NewImg}
+          alt="New Explorer badge"
           width={badgeWidth}
           height={badgeHeight}
           className="h-6 w-auto select-none leaderboard-badge"

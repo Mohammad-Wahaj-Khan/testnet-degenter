@@ -15,11 +15,16 @@ import {
 import { Info } from "lucide-react";
 import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../../../config/chain";
+import { API_BASE_URL } from "@/lib/api";
+
+const normalizeWalletApiBase = (value?: string) => {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed || /undefined|null/i.test(trimmed)) return API_BASE_URL;
+  return trimmed;
+};
 
 const HOLDINGS_API_ENDPOINTS = Array.from(
-  new Set([
-    process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API ?? "http://82.208.20.12:8004",
-  ])
+  new Set([normalizeWalletApiBase(process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API)])
 );
 const MAX_DONUT_ITEMS = 7;
 

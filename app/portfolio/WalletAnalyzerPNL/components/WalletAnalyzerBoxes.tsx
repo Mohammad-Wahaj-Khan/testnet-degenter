@@ -3,6 +3,7 @@
 import React from "react";
 import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../../../config/chain";
+import { API_BASE_URL } from "@/lib/api";
 
 export const analyzerTabs = [
   { id: "trading", label: "Trading PNL" },
@@ -19,6 +20,12 @@ const timeframeToWin: Record<TradingTimeframe, string> = {
   "7d": "7d",
   "10d": "10d",
   "1M": "30d",
+};
+
+const normalizeWalletApiBase = (value?: string) => {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed || /undefined|null/i.test(trimmed)) return API_BASE_URL;
+  return trimmed;
 };
 
 type PnlTokenItem = {
@@ -58,7 +65,7 @@ export default function WalletAnalyzer({
   const address = addressOverride?.trim() || connectedAddress;
   const apiEndpoints = React.useMemo(
     () => [
-      process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API ?? "http://82.208.20.12:8004",
+      normalizeWalletApiBase(process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API),
     ],
     []
   );
@@ -136,6 +143,7 @@ export default function WalletAnalyzer({
     const loadPnlTokens = async () => {
       setPnlLoading(true);
       setPnlError(null);
+      setPnlTokens([]);
 
       try {
         const win = timeframeToWin[timeframe];
@@ -192,6 +200,7 @@ export default function WalletAnalyzer({
     const loadDistribution = async () => {
       setDistributionLoading(true);
       setDistributionError(null);
+      setDistribution([]);
 
       try {
         const win = timeframeToWin[timeframe];

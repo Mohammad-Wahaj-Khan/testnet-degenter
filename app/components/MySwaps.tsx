@@ -5,9 +5,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../config/chain";
+import { API_BASE_URL } from "@/lib/api";
 
 /* ---------- CONFIG ---------- */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 
 /* ---------- TYPES ---------- */
 interface Holder {

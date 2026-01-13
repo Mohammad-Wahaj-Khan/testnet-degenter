@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
+import { API_BASE_URL } from "@/lib/api";
 
 type ResultType = "token";
 type SearchResult = {
@@ -76,7 +77,7 @@ const shouldHideMcap = (t: Token) => {
     idLower === STAKED_ZIG_DENOM
   );
 };
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 
 async function fetchAllPoolsOnce(): Promise<Token[]> {
   if (POOL_STORE.loaded) return POOL_STORE.tokens;

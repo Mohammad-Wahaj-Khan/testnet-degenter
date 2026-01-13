@@ -5,8 +5,9 @@ import Link from "next/link";
 import RecentTrades from "./RecentTrades";
 import AuditPanel from "./audit-panel";
 import { FileCode, Wallet } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 
 const MAX_HOLDERS = 200;
 

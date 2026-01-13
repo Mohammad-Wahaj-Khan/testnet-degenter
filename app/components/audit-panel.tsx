@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTokenSummary } from "@/app/hooks/useTokenSummary";
-import { tokenAPI, type TokenDetailResponse } from "@/lib/api";
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { tokenAPI, type TokenDetailResponse, API_BASE_URL } from "@/lib/api";
+const API_BASE = API_BASE_URL;
 
 interface SecurityResponse {
   success: boolean;

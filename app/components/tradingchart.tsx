@@ -16,6 +16,7 @@ import {
 import { Copy, Expand, RefreshCw, Share2 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { SignerFilterSummary } from "@/app/components/RecentTrades";
+import { API_BASE_URL } from "@/lib/api";
 
 declare global {
   interface Window {
@@ -25,7 +26,7 @@ declare global {
 }
 
 /* ---------- CONFIG ---------- */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE = API_BASE_URL;
 const API_KEY =
   process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
 const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};
@@ -194,6 +195,34 @@ function resolveTokenExponent(data: any, fallback = 6): number {
   return fallback;
 }
 
+const isNumericTokenKey = (value?: string | null) =>
+  Boolean(value && /^[0-9]+$/.test(value));
+
+const resolveTokenKeyFromId = async (tokenId: string) => {
+  try {
+    const res = await fetchApi(
+      `${API_BASE}/tokens/swap-list?bucket=24h&unit=usd`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const match =
+      json?.data?.find(
+        (t: { tokenId?: string | number }) =>
+          String(t?.tokenId ?? "") === String(tokenId)
+      ) || null;
+    if (!match) return null;
+    return (match.symbol ||
+      match.denom ||
+      match.display ||
+      match.name ||
+      null) as string | null;
+  } catch (err) {
+    console.error("Error resolving token by id:", err);
+    return null;
+  }
+};
+
 function derivePriceFromReserves(
   attrs: { key: string; value: string }[],
   tokenDenom: string,
@@ -330,7 +359,8 @@ type PriceDisplay = ChartUnit;
 
 /* ---------- Datafeed bound to your API + Websocket ---------- */
 function makeDatafeed(
-  tokenId: string,
+  apiTokenKey: string,
+  tokenDenom: string | null,
   getMode: () => ChartMode,
   getUnit: () => ChartUnit,
   getZigUsd: () => number,
@@ -354,14 +384,24 @@ function makeDatafeed(
     const fromIso = new Date(fromSec * 1000).toISOString();
     const toIso = new Date(toSec * 1000).toISOString();
     const url =
-      `${API_BASE}/tokens/${encodeURIComponent(tokenId)}/ohlcv` +
+      `${API_BASE}/tokens/${encodeURIComponent(apiTokenKey)}/ohlcv` +
       `?tf=${tf}&from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(
         toIso
       )}` +
       `&mode=${mode}&unit=${unit}&priceSource=best&fill=prev`;
     const r = await fetchApi(url, { cache: "no-store" });
     const j = await r.json();
-    const data = Array.isArray(j?.data) ? j.data : [];
+    let data = Array.isArray(j?.data) ? j.data : [];
+    if (!data.length) {
+      try {
+        const fallbackUrl =
+          `${API_BASE}/tokens/${encodeURIComponent(apiTokenKey)}/ohlcv` +
+          `?tf=${tf}&mode=${mode}&unit=${unit}&priceSource=best&fill=prev`;
+        const fallbackRes = await fetchApi(fallbackUrl, { cache: "no-store" });
+        const fallbackJson = await fallbackRes.json();
+        data = Array.isArray(fallbackJson?.data) ? fallbackJson.data : [];
+      } catch {}
+    }
     return data
       .map((b: any) => ({
         time: Number(b.ts_sec ?? b.ts ?? b.time) * 1000,
@@ -457,10 +497,10 @@ function makeDatafeed(
       return;
     }
 
-    const tokenDenom = tokenId;
+    const denomKey = tokenDenom || apiTokenKey;
     const queries = [
-      `tm.event='Tx' AND wasm.action='swap' AND wasm.offer_asset='${tokenDenom}' AND wasm.ask_asset='${NATIVE_DENOM}'`,
-      `tm.event='Tx' AND wasm.action='swap' AND wasm.offer_asset='${NATIVE_DENOM}' AND wasm.ask_asset='${tokenDenom}'`,
+      `tm.event='Tx' AND wasm.action='swap' AND wasm.offer_asset='${denomKey}' AND wasm.ask_asset='${NATIVE_DENOM}'`,
+      `tm.event='Tx' AND wasm.action='swap' AND wasm.offer_asset='${NATIVE_DENOM}' AND wasm.ask_asset='${denomKey}'`,
     ];
     queries.forEach((q, idx) => {
       try {
@@ -630,7 +670,11 @@ function makeDatafeed(
         console.debug("WS error payload ignored", msg.error);
         return;
       }
-      const swap = deriveSwapFromWs(msg, tokenId, getTokenExponent());
+      const swap = deriveSwapFromWs(
+        msg,
+        tokenDenom || apiTokenKey,
+        getTokenExponent()
+      );
       if (swap) pushSwapToSubscribers(swap);
     })().catch((e) => console.error("ws msg parse", e));
   };
@@ -956,6 +1000,7 @@ export default function TradingChart({
     changePercent?: number;
   }>({});
 
+  const [resolvedTokenKey, setResolvedTokenKey] = useState<string>(token);
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
   const [currentView, setCurrentView] = useState<ChartView>("price");
   const [priceDisplay, setPriceDisplay] = useState<PriceDisplay>("usd");
@@ -977,6 +1022,28 @@ export default function TradingChart({
   const [livePrice, setLivePrice] = useState<{ zig: number; ts: number } | null>(
     null
   );
+  const chartTokenKey = resolvedTokenKey || token;
+
+  useEffect(() => {
+    setResolvedTokenKey(token);
+    if (!isNumericTokenKey(token)) return;
+    let active = true;
+    resolveTokenKeyFromId(token)
+      .then((resolved) => {
+        if (!active) return;
+        if (resolved) setResolvedTokenKey(resolved);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!tokenData?.symbol) return;
+    if (tokenData.symbol === resolvedTokenKey) return;
+    setResolvedTokenKey(tokenData.symbol);
+  }, [tokenData?.symbol, resolvedTokenKey]);
 
   const isStZigToken = useMemo(() => {
     const t = (token || "").toLowerCase();
@@ -1062,7 +1129,7 @@ export default function TradingChart({
     const mode = modeRef.current;
 
     const settings = {
-      token,
+      token: chartTokenKey,
       signer: signerSummary.signer,
       unit,
       mode,
@@ -1109,7 +1176,7 @@ export default function TradingChart({
       const maxSec = Math.max(...tradeTimes) + stepSec;
       try {
         const url =
-          `${API_BASE}/tokens/${encodeURIComponent(token)}/ohlcv` +
+          `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv` +
           `?tf=${TF_PRESETS[tfKey].tf}` +
           `&from=${encodeURIComponent(new Date(minSec * 1000).toISOString())}` +
           `&to=${encodeURIComponent(new Date(maxSec * 1000).toISOString())}` +
@@ -1201,7 +1268,7 @@ export default function TradingChart({
       tvShapeIdsRef.current = [...tvShapeIdsRef.current, ...shapeIds];
     }
     tvLastSettingsRef.current = settings;
-  }, [clearTvShapes, getZigUsd, resolveTvTf, signerSummary, token]);
+  }, [clearTvShapes, getZigUsd, resolveTvTf, signerSummary, chartTokenKey]);
 
   const applyTvWalletShapesRef = useRef<() => Promise<void>>(async () => {});
 
@@ -1260,14 +1327,17 @@ export default function TradingChart({
   );
 
   const fetchTokenData = useCallback(async () => {
-    const cacheKey = `token_${token}`;
+    const cacheKey = `token_${chartTokenKey}`;
     const now = Date.now();
 
     const cachedData = localStorage.getItem(cacheKey);
-    const cacheTime = lastFetched[token] || 0;
+    const cacheTime = lastFetched[chartTokenKey] || 0;
 
     if (cachedData && now - cacheTime < CACHE_DURATION) {
-      const parsed = normalizeTokenPayload(JSON.parse(cachedData), token);
+      const parsed = normalizeTokenPayload(
+        JSON.parse(cachedData),
+        chartTokenKey
+      );
       tokenExponentRef.current = resolveTokenExponent(parsed);
       setTokenData(parsed);
       const cachedSupply = Number(parsed?.circulatingSupply);
@@ -1282,14 +1352,17 @@ export default function TradingChart({
       setLoading(true);
 
       const apiResponse = await fetchApi(
-        `${API_BASE}/tokens/${encodeURIComponent(token)}`
+        `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}`
       );
       if (apiResponse.ok) {
         const apiData = await apiResponse.json();
         if (apiData?.success) {
-          const normalized = normalizeTokenPayload(apiData.data, token);
+          const normalized = normalizeTokenPayload(
+            apiData.data,
+            chartTokenKey
+          );
           localStorage.setItem(cacheKey, JSON.stringify(normalized));
-          setLastFetched((prev) => ({ ...prev, [token]: now }));
+          setLastFetched((prev) => ({ ...prev, [chartTokenKey]: now }));
 
           if (normalized?.circulatingSupply) {
             const supplyVal = Number(normalized.circulatingSupply);
@@ -1312,7 +1385,7 @@ export default function TradingChart({
       setError("Failed to load token data");
       setLoading(false);
     }
-  }, [token, lastFetched]);
+  }, [chartTokenKey, lastFetched]);
 
   const fetchFromRPC = async () => {
     const zigPriceInUsd = parseFloat(localStorage.getItem("priceInZIG") || "0");
@@ -1325,7 +1398,7 @@ export default function TradingChart({
 
     try {
       const rpcResponse = await fetch(
-        `https://public-zigchain-testnet-rpc.numia.xyztx_search?query=%22wasm.offer_asset=%27${token}%27+AND+wasm.action=%27swap%27%22&prove=true&page=1&per_page=1&order_by=%22desc%22`
+        `https://public-zigchain-testnet-rpc.numia.xyztx_search?query=%22wasm.offer_asset=%27${chartTokenKey}%27+AND+wasm.action=%27swap%27%22&prove=true&page=1&per_page=1&order_by=%22desc%22`
       );
       const rpcData = await rpcResponse.json();
 
@@ -1362,19 +1435,22 @@ export default function TradingChart({
             mcNative: priceInZig * circSupply,
             change24h: 0,
             volume24h: 0,
-            symbol: token.split(".").pop()?.toUpperCase() || "TOKEN",
-            name: token.split(".").pop() || "Token",
+            symbol: chartTokenKey.split(".").pop()?.toUpperCase() || "TOKEN",
+            name: chartTokenKey.split(".").pop() || "Token",
             timeframe,
             historicalData: [],
             circulatingSupply: circSupply,
           };
           tokenExponentRef.current = resolveTokenExponent(newData);
 
-          localStorage.setItem(`token_${token}`, JSON.stringify(newData));
+          localStorage.setItem(
+            `token_${chartTokenKey}`,
+            JSON.stringify(newData)
+          );
           if (Number.isFinite(circSupply) && circSupply > 0) {
             localStorage.setItem("circulatingSupply", circSupply.toString());
           }
-          setLastFetched((prev) => ({ ...prev, [token]: Date.now() }));
+          setLastFetched((prev) => ({ ...prev, [chartTokenKey]: Date.now() }));
 
           setTokenData(newData);
         }
@@ -1389,16 +1465,7 @@ export default function TradingChart({
 
   useEffect(() => {
     fetchTokenData();
-
-    const interval = setInterval(() => {
-      const cacheTime = lastFetched[token] || 0;
-      if (Date.now() - cacheTime >= CACHE_DURATION) {
-        fetchTokenData();
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [token, fetchTokenData]);
+  }, [chartTokenKey, fetchTokenData]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -1412,7 +1479,7 @@ export default function TradingChart({
     setLivePrice(null);
     headerPrevPriceRef.current = null;
     setHeaderDir("");
-  }, [token]);
+  }, [chartTokenKey]);
 
   useEffect(() => {
     if (!isStZigToken) return;
@@ -1426,17 +1493,17 @@ export default function TradingChart({
   useEffect(() => {
     setContractAddress(null);
     contractAddressRef.current = null;
-  }, [token]);
+  }, [chartTokenKey]);
 
   // fetch pool contract
   useEffect(() => {
     let cancelled = false;
-    if (!token) return;
+    if (!chartTokenKey) return;
     (async () => {
       try {
         const response = await fetchApi(
           `${API_BASE}/tokens/${encodeURIComponent(
-            token
+            chartTokenKey
           )}?priceSource=best&includePools=1`,
           { cache: "no-store" }
         );
@@ -1470,7 +1537,7 @@ export default function TradingChart({
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [chartTokenKey]);
 
   useEffect(() => {
     const native = tokenData?.priceInNative;
@@ -1565,6 +1632,7 @@ export default function TradingChart({
         if (cancelled || !containerRef.current) return;
 
         const datafeed = makeDatafeed(
+          chartTokenKey,
           token,
           getMode,
           getUnit,
@@ -1578,7 +1646,7 @@ export default function TradingChart({
         const TV = (window as any).TradingView;
 
         const widget = new TV.widget({
-          symbol: token,
+          symbol: chartTokenKey,
           interval: "60",
           container: containerRef.current,
           datafeed,
@@ -1600,12 +1668,12 @@ export default function TradingChart({
 
         try {
           const r = await fetchApi(
-            `${API_BASE}/tokens/${encodeURIComponent(token)}?priceSource=best`,
+            `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}?priceSource=best`,
             { cache: "no-store" }
           );
           const j = await r.json();
           if (!cancelled && j?.success && j?.data) {
-            const normalized = normalizeTokenPayload(j.data, token);
+            const normalized = normalizeTokenPayload(j.data, chartTokenKey);
             setMeta({
               symbol: normalized.symbol,
               name: normalized.name,
@@ -1631,7 +1699,7 @@ export default function TradingChart({
       widgetRef.current = null;
     };
   }, [
-    token,
+    chartTokenKey,
     mode,
     unit,
     contractAddress,
@@ -1645,7 +1713,7 @@ export default function TradingChart({
 
   useEffect(() => {
     void applyTvWalletShapesRef.current();
-  }, [applyTvWalletShapes, mode, unit, signerSummary, token]);
+  }, [applyTvWalletShapes, mode, unit, signerSummary, chartTokenKey]);
 
   // ---- extra lightweight-charts header stuff (kept as in your file) ----
   const chartHostRef = useRef<HTMLDivElement | null>(null);
@@ -1778,7 +1846,7 @@ export default function TradingChart({
   useEffect(() => {
     if (!chartReady) return;
     applyWalletMarkers();
-  }, [chartReady, applyWalletMarkers, token]);
+  }, [chartReady, applyWalletMarkers, chartTokenKey]);
 
   const parsePayload = (payload: any): ChartDataPoint[] => {
     const raw = payload?.data || [];
@@ -1807,7 +1875,7 @@ export default function TradingChart({
     const lock = historyLockCeilRef.current;
     const lockMs = lock ? Math.max(fromMs, lock * 1000) : fromMs;
     return (
-      `${API_BASE}/tokens/${encodeURIComponent(token)}/ohlcv` +
+      `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv` +
       `?tf=${tf}&from=${encodeURIComponent(
         iso(lockMs)
       )}&to=${encodeURIComponent(iso(toMs))}` +
@@ -1912,7 +1980,7 @@ export default function TradingChart({
     if (genesisSecRef.current) return genesisSecRef.current;
     try {
       const url =
-        `${API_BASE}/tokens/${encodeURIComponent(token)}/ohlcv?tf=1h` +
+        `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv?tf=1h` +
         `&from=${encodeURIComponent("1970-01-01T00:00:00.000Z")}` +
         `&to=${encodeURIComponent(iso(Date.now()))}` +
         `&mode=${mode}&unit=${unit}&priceSource=best&fill=none&${cb()}`;
@@ -1937,7 +2005,7 @@ export default function TradingChart({
     try {
       const toMsExclusive = beforeSec * 1000 - 1;
       const url =
-        `${API_BASE}/tokens/${encodeURIComponent(token)}/ohlcv` +
+        `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv` +
         `?tf=${tf}&window=1&to=${encodeURIComponent(iso(toMsExclusive))}` +
         `&mode=${mode}&unit=${unit}&priceSource=best&fill=prev&${cb()}`;
       const res = await fetchApi(url, { cache: "no-store" });
@@ -2007,7 +2075,7 @@ export default function TradingChart({
       const { start, end } = bucketRange(genesisSec, nowSec, cfg.stepSec);
 
       const initUrl =
-        `${API_BASE}/tokens/${encodeURIComponent(token)}/ohlcv` +
+        `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv` +
         `?tf=${cfg.tf}&from=${encodeURIComponent(
           iso(start * 1000)
         )}&to=${encodeURIComponent(iso(nowSec * 1000))}` +
@@ -2125,7 +2193,7 @@ export default function TradingChart({
       const toSec = oldest - step;
       const fromSec = Math.max(genesis, toSec - BACKFILL_BATCH_BARS * step);
       const res = await fetchApi(
-        `${API_BASE}/tokens/${encodeURIComponent(token)}/ohlcv?tf=${cfg.tf}` +
+        `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv?tf=${cfg.tf}` +
           `&from=${encodeURIComponent(
             iso(fromSec * 1000)
           )}&to=${encodeURIComponent(iso(toSec * 1000))}` +
@@ -2185,7 +2253,7 @@ export default function TradingChart({
 
   useEffect(() => {
     burstUntilRef.current = Date.now() + 90_000;
-  }, [token]);
+  }, [chartTokenKey]);
 
   const jitter = (min: number, max: number) =>
     min + Math.floor(Math.random() * (max - min + 1));
@@ -2316,7 +2384,7 @@ export default function TradingChart({
       const toSecExclusive = lastClosedStart + step - 1;
 
       const url =
-        `${API_BASE}/tokens/${encodeURIComponent(token)}/ohlcv` +
+        `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv` +
         `?tf=${tf}&window=${n + 1}&to=${encodeURIComponent(
           iso(toSecExclusive * 1000)
         )}` +
@@ -2334,7 +2402,7 @@ export default function TradingChart({
   };
 
   useEffect(() => {
-    if (!token || !chartReady) return;
+    if (!chartTokenKey || !chartReady) return;
     let stopped = false;
     const schedule = (ms: number) => {
       if (stopped) return;
@@ -2386,7 +2454,7 @@ export default function TradingChart({
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = null;
     };
-  }, [token, activeTf, mode, unit, chartReady, viewMode]);
+  }, [chartTokenKey, activeTf, mode, unit, chartReady, viewMode]);
 
   const currentPriceVal = useMemo(() => {
     if (!tokenData) return null;

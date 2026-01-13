@@ -17,6 +17,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { API_BASE_URL } from "@/lib/api";
 
 const chartData = [
   { time: "Mon", close: 19600 },
@@ -42,10 +43,14 @@ const socialTags: { label: string; image: StaticImageData }[] = [
   { label: "Hacker", image: Hacker },
 ];
 
+const normalizeWalletApiBase = (value?: string) => {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed || /undefined|null/i.test(trimmed)) return API_BASE_URL;
+  return trimmed;
+};
+
 const HOLDINGS_API_ENDPOINTS = Array.from(
-  new Set([
-    process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API ?? "http://82.208.20.12:8004",
-  ])
+  new Set([normalizeWalletApiBase(process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API)])
 );
 
 const safeNumber = (value: unknown): number => {
