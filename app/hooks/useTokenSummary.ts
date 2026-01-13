@@ -14,7 +14,7 @@ type TokenSummaryMessage = {
   data?: TokenSummaryData;
 };
 
-const DEFAULT_WS_URL = "ws://82.208.20.12:8004/ws";
+const DEFAULT_WS_URL = process.env.NEXT_PUBLIC_TRADES_WS_URL || "";
 
 const toNumber = (value?: string | number | null) => {
   if (value == null) return null;

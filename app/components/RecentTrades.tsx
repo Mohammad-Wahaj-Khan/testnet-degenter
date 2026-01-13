@@ -20,7 +20,7 @@ const API_KEY =
   process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
 const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};
 const TRADES_WS_URL =
-  process.env.NEXT_PUBLIC_TRADES_WS_URL || "ws://82.208.20.12:8004/ws";
+  process.env.NEXT_PUBLIC_TRADES_WS_URL || "";
 const MAX_TRADES = 500;
 
 const fetchApi = (url: string, init: RequestInit = {}) =>
