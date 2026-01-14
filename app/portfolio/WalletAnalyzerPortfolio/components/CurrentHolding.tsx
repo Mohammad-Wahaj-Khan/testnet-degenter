@@ -307,7 +307,7 @@ export default function CurrentHolding({ addressOverride }: CurrentHoldingProps)
       try {
         const holdingsPayload = await fetchFromEndpoints(
           HOLDINGS_API_ENDPOINTS,
-          `wallets/${encodeURIComponent(address)}/portfolio/holdings`,
+          `wallets/${encodeURIComponent(address)}/portfolio/holdings?source=chain`,
           {
             cache: "no-store",
             signal: controller.signal,
@@ -335,9 +335,13 @@ export default function CurrentHolding({ addressOverride }: CurrentHoldingProps)
               token?.token_id ??
               token?.tokenId ??
               token?.symbol ??
+              token?.name ??
               "unknown";
-            const symbol = token?.symbol ?? denom;
-            const displayName = formatTokenName(symbol);
+            if (typeof denom === "string" && denom.startsWith("ibc/")) {
+              return null;
+            }
+            const symbolOrName = token?.symbol ?? token?.name ?? denom;
+            const displayName = formatTokenName(symbolOrName);
             const balance = safeNumber(entry?.balance);
             if (balance <= 0) return null;
             const priceUsd = safeNumber(entry?.price_usd ?? entry?.priceUsd);

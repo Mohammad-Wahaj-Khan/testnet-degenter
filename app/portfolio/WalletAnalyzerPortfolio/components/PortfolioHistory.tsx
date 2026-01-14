@@ -235,7 +235,7 @@ export default function PortfolioHistory({
       try {
         const holdingsPayload = await fetchFromEndpoints(
           HOLDINGS_API_ENDPOINTS,
-          `wallets/${encodeURIComponent(address)}/portfolio/holdings`,
+          `wallets/${encodeURIComponent(address)}/portfolio/holdings?source=chain`,
           {
             cache: "no-store",
             signal: controller.signal,
