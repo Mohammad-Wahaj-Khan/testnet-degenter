@@ -98,7 +98,7 @@ const LargeTradersTable: React.FC = () => {
         queryParams.set("class", selectedClass);
       }
 
-      const url = `${API_BASE}/trades?tf=30m&unit=zig&${queryParams.toString()}`;
+      const url = `${API_BASE}/trades?tf=30d&unit=zig&${queryParams.toString()}`;
       const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -147,7 +147,7 @@ const LargeTradersTable: React.FC = () => {
     (async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/tokens/swap-list?q=zig&bucket=24h&unit=usd`
+          `${API_BASE}/tokens/swap-list?q=zig&bucket=30d&unit=usd`
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
