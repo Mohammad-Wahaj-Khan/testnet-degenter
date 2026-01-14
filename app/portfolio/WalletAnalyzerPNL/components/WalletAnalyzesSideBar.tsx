@@ -299,7 +299,7 @@ export default function WalletAnalyzerSidebar({
                     <div className="flex-1">
                     <p className="text-sm font-semibold text-white tracking-tight">
                       {/* {formatWalletAddress(displayAddress)} */}
-                      wahaj
+                      Profile Name
                     </p>
                     <p className="text-[11px] text-gray-300">
                       {formatWalletAddress(displayAddress)}
