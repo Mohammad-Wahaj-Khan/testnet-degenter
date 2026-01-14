@@ -83,45 +83,60 @@ async function fetchAllPoolsOnce(): Promise<Token[]> {
   if (POOL_STORE.loaded) return POOL_STORE.tokens;
 
   try {
-    const response = await fetch(
-      `${API_BASE}/tokens?bucket=24h&priceSource=best&sort=volume&dir=desc&includeChange=1&limit=100&offset=0`,
-      {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
+    const limit = 200;
+    let offset = 0;
+    let hasMore = true;
+    const allTokens: Token[] = [];
+
+    while (hasMore) {
+      const response = await fetch(
+        `${API_BASE}/tokens?bucket=24h&priceSource=best&sort=volume&dir=desc&includeChange=1&limit=${limit}&offset=${offset}`,
+        {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        console.error("Failed to fetch tokens:", response.statusText);
+        break;
       }
-    );
 
-    if (!response.ok) {
-      console.error("Failed to fetch tokens:", response.statusText);
-      return [];
+      const json = await response.json();
+      if (!json.success || !Array.isArray(json.data)) {
+        console.error("Invalid API response format");
+        break;
+      }
+
+      const batch: Token[] = json.data
+        .filter((token: any) => {
+          const tokenName = (token.name || "").toLowerCase();
+          return tokenName !== "zig" && tokenName !== "uzig";
+        })
+        .map((token: any) => ({
+          id: token.denom || token.tokenId,
+          name: token.name || "Unknown Token",
+          symbol: token.symbol || "UNKNOWN",
+          denom: token.denom || "UNKNOWN",
+          icon: token.imageUri || null,
+          price: token.priceUsd || 0,
+          tx: token.tx || 0,
+          marketCap: token.mcapUsd || 0,
+          volume24: token.volUsd || 0,
+          volume24Buy: token.volBuyNative || 0,
+          volume24Sell: token.volSellNative || 0,
+          volume24Pct: token.change24hPct || 0,
+          txCount: token.tx || 0,
+        }));
+
+      allTokens.push(...batch);
+      hasMore = json.data.length === limit;
+      offset += limit;
     }
 
-    const json = await response.json();
-    if (!json.success || !Array.isArray(json.data)) {
-      console.error("Invalid API response format");
-      return [];
-    }
-
-    const tokens: Token[] = json.data
-      .filter((token: any) => {
-        const tokenName = (token.name || "").toLowerCase();
-        return tokenName !== "zig" && tokenName !== "uzig";
-      })
-      .map((token: any) => ({
-        id: token.denom || token.tokenId,
-        name: token.name || "Unknown Token",
-        symbol: token.symbol || "UNKNOWN",
-        denom: token.denom || "UNKNOWN",
-        icon: token.imageUri || null,
-        price: token.priceUsd || 0,
-        tx: token.tx || 0,
-        marketCap: token.mcapUsd || 0,
-        volume24: token.volUsd || 0,
-        volume24Buy: token.volBuyNative || 0,
-        volume24Sell: token.volSellNative || 0,
-        volume24Pct: token.change24hPct || 0,
-        txCount: token.tx || 0,
-      }));
+    const tokens = allTokens
+      .filter((token) => token.volume24 > 0)
+      .sort((a, b) => b.volume24 - a.volume24);
 
     POOL_STORE.tokens = tokens;
     POOL_STORE.loaded = true;
@@ -537,7 +552,7 @@ export default function SearchBar({
                             </tr>
                           </thead>
                           <tbody>
-                            {(debounced ? results : dataset.slice(0, 20)).map(
+                            {(debounced ? results : dataset).map(
                               (t, i) => (
                                 <tr
                                   key={t.id}

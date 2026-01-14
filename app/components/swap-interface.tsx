@@ -1090,6 +1090,15 @@ export default function SwapInterface({
     setAmountIn(bal.toFixed(Math.min(6, activePay.decimals)));
   }
 
+  function fillHalf() {
+    const k = keyOf(activePay);
+    let bal = balances[k] || 0;
+    if (activePay.type === "native" && (activePay as any).denom === "uzig")
+      bal = Math.max(0, bal - 0.2);
+    const half = bal / 2;
+    setAmountIn(half.toFixed(Math.min(6, activePay.decimals)));
+  }
+
   const payBalance = balances[keyOf(activePay)] ?? 0;
 
   /* =========================
@@ -1650,6 +1659,14 @@ export default function SwapInterface({
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={fillHalf}
+                  disabled={!address}
+                  className="text-xs bg-black/50 hover:bg-black/50 text-white px-2 py-1 rounded-lg"
+                >
+                  Half
+                </button>
                 <button
                   type="button"
                   onClick={fillMax}

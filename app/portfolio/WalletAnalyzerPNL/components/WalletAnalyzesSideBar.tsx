@@ -111,6 +111,13 @@ const formatCurrencyCompact = (value: number) => {
   }).format(value);
 };
 
+const formatWalletAddress = (value?: string) => {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return "No wallet selected";
+  if (trimmed.length <= 12) return trimmed;
+  return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
+};
+
 type WalletAnalyzerSidebarProps = {
   addressOverride?: string;
 };
@@ -251,6 +258,7 @@ export default function WalletAnalyzerSidebar({
     : valueError
     ? "N/A"
     : formatCurrencyCompact(walletValue);
+  const displayAddress = address?.trim() || "No wallet selected";
 
   return (
     <div className="w-full space-y-4">
@@ -289,8 +297,15 @@ export default function WalletAnalyzerSidebar({
                         unoptimized
                     />
                     <div className="flex-1">
-                    <p className="text-sm font-semibold text-white tracking-tight">7jDVmS8HBdDfe16d</p>
-                    <p className="text-[11px] text-gray-300">7jDVmS8HBdNDdtGXddw</p>
+                    <p className="text-sm font-semibold text-white tracking-tight">
+                      {/* {formatWalletAddress(displayAddress)} */}
+                      wahaj
+                    </p>
+                    <p className="text-[11px] text-gray-300">
+                      {formatWalletAddress(displayAddress)}
+
+                      {/* {displayAddress} */}
+                    </p>
                     <div className="mt-3 flex items-center gap-2">
                         <span className="rounded-md border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
                         4M

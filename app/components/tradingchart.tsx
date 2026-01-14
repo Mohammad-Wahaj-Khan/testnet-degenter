@@ -1053,167 +1053,169 @@ export default function TradingChart({
     return TF_MAP[res] ?? "1h";
   }, []);
 
-  const applyTvWalletShapes = useCallback(async () => {
-    const widget = widgetRef.current;
-    if (!widget) return;
-    const chart = widget.activeChart?.();
-    if (!chart) return;
+const applyTvWalletShapes = useCallback(async () => {
+  const widget = widgetRef.current;
+  if (!widget) return;
+  const chart = widget.activeChart?.();
+  if (!chart) return;
 
-    if (!signerSummary?.trades?.length) {
-      clearTvShapes(chart);
-      tvLastSettingsRef.current = null;
-      return;
-    }
-    if (modeRef.current !== "price") return;
+  if (!signerSummary?.trades?.length) {
+    clearTvShapes(chart);
+    tvLastSettingsRef.current = null;
+    return;
+  }
+  if (modeRef.current !== "price") return;
 
-    const unit = unitRef.current;
-    const zigUsd = getZigUsd();
-    const shapeIds: string[] = [];
-    const tfKey = resolveTvTf(chart);
-    const stepSec = STEP_SEC[tfKey] ?? TF_PRESETS["5m"].stepSec;
-    const mode = modeRef.current;
+  const unit = unitRef.current;
+  const zigUsd = getZigUsd();
+  const shapeIds: string[] = [];
+  const tfKey = resolveTvTf(chart);
+  const stepSec = STEP_SEC[tfKey] ?? TF_PRESETS["5m"].stepSec;
+  const mode = modeRef.current;
 
-    const settings = {
-      token,
-      signer: signerSummary.signer,
-      unit,
-      mode,
-      resolution: tfKey,
-    };
-    const lastSettings = tvLastSettingsRef.current;
-    const shouldRebuild =
-      !lastSettings ||
-      lastSettings.token !== settings.token ||
-      lastSettings.signer !== settings.signer ||
-      lastSettings.unit !== settings.unit ||
-      lastSettings.mode !== settings.mode ||
-      lastSettings.resolution !== settings.resolution ||
-      signerSummary.trades.length < tvShapeByKeyRef.current.size;
+  const settings = {
+    token,
+    signer: signerSummary.signer,
+    unit,
+    mode,
+    resolution: tfKey,
+  };
+  const lastSettings = tvLastSettingsRef.current;
+  const shouldRebuild =
+    !lastSettings ||
+    lastSettings.token !== settings.token ||
+    lastSettings.signer !== settings.signer ||
+    lastSettings.unit !== settings.unit ||
+    lastSettings.mode !== settings.mode ||
+    lastSettings.resolution !== settings.resolution ||
+    signerSummary.trades.length < tvShapeByKeyRef.current.size;
 
-    if (shouldRebuild) {
-      clearTvShapes(chart);
-    }
+  if (shouldRebuild) {
+    clearTvShapes(chart);
+  }
 
-    const buildTradeKey = (trade: {
-      time: string;
-      direction: "buy" | "sell";
-      priceInZig: number;
-    }) => `${trade.time}-${trade.direction}-${trade.priceInZig}`;
+  const buildTradeKey = (trade: {
+    time: string;
+    direction: "buy" | "sell";
+    priceInZig: number;
+  }) => `${trade.time}-${trade.direction}-${trade.priceInZig}`;
 
-    const pendingTrades = shouldRebuild
-      ? signerSummary.trades
-      : signerSummary.trades.filter(
-          (trade) => !tvShapeByKeyRef.current.has(buildTradeKey(trade))
-        );
+  const pendingTrades = shouldRebuild
+    ? signerSummary.trades
+    : signerSummary.trades.filter(
+        (trade) => !tvShapeByKeyRef.current.has(buildTradeKey(trade))
+      );
 
-    if (!pendingTrades.length) {
-      tvLastSettingsRef.current = settings;
-      return;
-    }
-
-    const tradeTimes = pendingTrades
-      .map((t) => Math.floor(Date.parse(t.time) / 1000))
-      .filter((t) => Number.isFinite(t));
-
-    let candleMap = new Map<number, ChartDataPoint>();
-    if (tradeTimes.length) {
-      const minSec = Math.min(...tradeTimes) - stepSec;
-      const maxSec = Math.max(...tradeTimes) + stepSec;
-      try {
-        const url =
-          `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv` +
-          `?tf=${TF_PRESETS[tfKey].tf}` +
-          `&from=${encodeURIComponent(new Date(minSec * 1000).toISOString())}` +
-          `&to=${encodeURIComponent(new Date(maxSec * 1000).toISOString())}` +
-          `&mode=${mode}&unit=${unit}&priceSource=best&fill=prev`;
-        const res = await fetchApi(url, { cache: "no-store" });
-        const json = await res.json();
-        const candles = Array.isArray(json?.data) ? json.data : [];
-        candleMap = new Map(candles.map((c: any) => [c.ts_sec || c.time, c]));
-      } catch {}
-    }
-
-    for (const trade of pendingTrades) {
-      const tsSec = Math.floor(Date.parse(trade.time) / 1000);
-      if (!Number.isFinite(tsSec)) continue;
-      const bucketSec = alignFloor(tsSec, stepSec);
-      const candle = candleMap.get(bucketSec);
-
-      const basePrice =
-        unit === "usd"
-          ? trade.priceUsd ??
-            (trade.priceInZig > 0 ? trade.priceInZig * zigUsd : 0)
-          : trade.priceInZig;
-
-      if (!Number.isFinite(basePrice) || basePrice <= 0) continue;
-
-      const isBuy = trade.direction === "buy";
-      const candleTop = candle?.high ?? candle?.close ?? basePrice;
-      const candleBottom = candle?.low ?? candle?.close ?? basePrice;
-      const referencePrice = isBuy ? candleTop : candleBottom;
-      if (!Number.isFinite(referencePrice) || referencePrice <= 0) continue;
-
-      const key = `${bucketSec}-${isBuy ? "B" : "S"}`;
-      const offsetIndex = tvBucketCountRef.current.get(key) ?? 0;
-      tvBucketCountRef.current.set(key, offsetIndex + 1);
-
-      const offset = referencePrice * (0.035 + offsetIndex * 0.022);
-      const markerPrice = isBuy
-        ? referencePrice + offset
-        : Math.max(referencePrice - offset, referencePrice * 0.001);
-
-      const themeColor = isBuy ? CANDLE_UP_COLOR : CANDLE_DOWN_COLOR;
-
-      try {
-        const markerId = await chart.createShape(
-          { time: bucketSec as UTCTimestamp, price: markerPrice },
-          {
-            // 'text' shape with these specific overrides creates the circular badge look
-            shape: "text",
-            text: isBuy ? "B" : "S",
-            lock: true,
-            disableSelection: true,
-            disableSave: true,
-            disableUndo: true,
-            overrides: {
-              fillBackground: true,
-              backgroundColor: themeColor,
-              backgroundTransparency: 0,
-              color: "#ffffff",
-              fontsize: 8,
-              bold: true,
-              borderVisible: true,
-              borderColor: themeColor,
-              borderWidth: 200,
-              drawBorder: true,
-              fixedSize: true,
-              showInObjectsTree: false,
-            },
-            zOrder: "top",
-          }
-        );
-
-        if (markerId) {
-          const tradeKey = buildTradeKey(trade);
-          tvShapeByKeyRef.current.set(tradeKey, markerId);
-          shapeIds.push(markerId);
-          const shape = chart.getShapeById?.(markerId);
-          if (shape) {
-            shape.setUserEditEnabled?.(false);
-            shape.setSelectionEnabled?.(false);
-            shape.bringToFront?.();
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to create marker:", err);
-      }
-    }
-
-    if (shapeIds.length) {
-      tvShapeIdsRef.current = [...tvShapeIdsRef.current, ...shapeIds];
-    }
+  if (!pendingTrades.length) {
     tvLastSettingsRef.current = settings;
-  }, [clearTvShapes, getZigUsd, resolveTvTf, signerSummary, token]);
+    return;
+  }
+
+  const tradeTimes = pendingTrades
+    .map((t) => Math.floor(Date.parse(t.time) / 1000))
+    .filter((t) => Number.isFinite(t));
+
+  let candleMap = new Map<number, ChartDataPoint>();
+  if (tradeTimes.length) {
+    const minSec = Math.min(...tradeTimes) - stepSec;
+    const maxSec = Math.max(...tradeTimes) + stepSec;
+    try {
+      const url =
+        `${API_BASE}/tokens/${encodeURIComponent(chartTokenKey)}/ohlcv` +
+        `?tf=${TF_PRESETS[tfKey].tf}` +
+        `&from=${encodeURIComponent(new Date(minSec * 1000).toISOString())}` +
+        `&to=${encodeURIComponent(new Date(maxSec * 1000).toISOString())}` +
+        `&mode=${mode}&unit=${unit}&priceSource=best&fill=prev`;
+      const res = await fetchApi(url, { cache: "no-store" });
+      const json = await res.json();
+      const candles = Array.isArray(json?.data) ? json.data : [];
+      candleMap = new Map(candles.map((c: any) => [c.ts_sec || c.time, c]));
+    } catch {}
+  }
+
+  for (const trade of pendingTrades) {
+    const tsSec = Math.floor(Date.parse(trade.time) / 1000);
+    if (!Number.isFinite(tsSec)) continue;
+    const bucketSec = alignFloor(tsSec, stepSec);
+    const candle = candleMap.get(bucketSec);
+
+    const basePrice =
+      unit === "usd"
+        ? trade.priceUsd ??
+          (trade.priceInZig > 0 ? trade.priceInZig * zigUsd : 0)
+        : trade.priceInZig;
+
+    if (!Number.isFinite(basePrice) || basePrice <= 0) continue;
+
+    const isBuy = trade.direction === "buy";
+    const candleTop = candle?.high ?? candle?.close ?? basePrice;
+    const candleBottom = candle?.low ?? candle?.close ?? basePrice;
+    const referencePrice = isBuy ? candleTop : candleBottom;
+    if (!Number.isFinite(referencePrice) || referencePrice <= 0) continue;
+
+    const key = `${bucketSec}-${isBuy ? "B" : "S"}`;
+    const offsetIndex = tvBucketCountRef.current.get(key) ?? 0;
+    tvBucketCountRef.current.set(key, offsetIndex + 1);
+
+    const offset = referencePrice * (0.035 + offsetIndex * 0.022);
+    const markerPrice = isBuy
+      ? referencePrice + offset
+      : Math.max(referencePrice - offset, referencePrice * 0.001);
+
+    const themeColor = isBuy ? CANDLE_UP_COLOR : CANDLE_DOWN_COLOR;
+
+    try {
+      const markerId = await chart.createShape(
+        { time: bucketSec as UTCTimestamp, price: markerPrice },
+        {
+          shape: "text",
+          text: isBuy ? "B" : "S",
+          lock: true,
+          disableSelection: true,
+          disableSave: true,
+          disableUndo: true,
+          overrides: {
+            backgroundColor: themeColor,
+            backgroundTransparency: 0,
+            color: "#ffffff",
+            fontsize: 11,        // Slightly larger for better centering
+            bold: true,
+            borderColor: themeColor,
+            borderWidth: 1,
+            drawBorder: true,
+            fillBackground: true,
+            fixedSize: true,      // Changed from false to true to keep it circular while zooming
+            padding: 4,           // Reduced padding to prevent the "pill" stretch
+            showInObjectsTree: false,
+            // The magic fix for full rounding in TV shapes:
+            wordWrapWidth: 0,     
+            forceBorderRadius: '100%', // Forces the badge to be a circle regardless of text width
+          },
+          zOrder: "top",
+        }
+      );
+
+      if (markerId) {
+        const tradeKey = buildTradeKey(trade);
+        tvShapeByKeyRef.current.set(tradeKey, markerId);
+        shapeIds.push(markerId);
+        const shape = chart.getShapeById?.(markerId);
+        if (shape) {
+          shape.setUserEditEnabled?.(false);
+          shape.setSelectionEnabled?.(false);
+          shape.bringToFront?.();
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to create marker:", err);
+    }
+  }
+
+  if (shapeIds.length) {
+    tvShapeIdsRef.current = [...tvShapeIdsRef.current, ...shapeIds];
+  }
+  tvLastSettingsRef.current = settings;
+}, [clearTvShapes, getZigUsd, resolveTvTf, signerSummary, token]);
 
   const applyTvWalletShapesRef = useRef<() => Promise<void>>(async () => {});
 

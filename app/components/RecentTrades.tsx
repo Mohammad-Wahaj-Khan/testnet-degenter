@@ -24,6 +24,8 @@ const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};
 const TRADES_WS_URL =
   process.env.NEXT_PUBLIC_TRADES_WS_URL || "";
 const MAX_TRADES = 500;
+const TRADE_LOOKBACK_DAYS = 7;
+const TRADE_LOOKBACK_MS = TRADE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 
 const fetchApi = (url: string, init: RequestInit = {}) =>
   fetch(url, {
@@ -303,6 +305,7 @@ const RecentTrades: React.FC<RecentTradesProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const hasLiveTradesRef = useRef(false);
 
   useEffect(() => {
     symbolMapRef.current = symbolMap;
@@ -658,14 +661,21 @@ const parseTradesFromStreamMessage = async (
         const response = await fetchApi(
           `${API_BASE}/trades/token/${encodeURIComponent(
             candidate
-          )}?tf=60d&unit=usd&limit=500`,
+          )}?tf=30d&unit=usd&limit=500`,
           { cache: "no-store" }
         );
         if (!response.ok) continue;
         const data = await response.json();
         if (!data?.success || !Array.isArray(data.data)) continue;
         if (data.data.length === 0) continue;
-        return data.data.map(mapApiTradeToLocal);
+        const cutoff = Date.now() - TRADE_LOOKBACK_MS;
+        return data.data
+          .map(mapApiTradeToLocal)
+          .filter((trade: { time: string; }) => {
+            const ts = Date.parse(trade.time);
+            return Number.isFinite(ts) && ts >= cutoff;
+          })
+          .slice(0, MAX_TRADES);
       }
 
       const resolvedSymbol = await resolveSymbolFromTokenId(tokenId);
@@ -673,13 +683,20 @@ const parseTradesFromStreamMessage = async (
         const response = await fetchApi(
           `${API_BASE}/trades/token/${encodeURIComponent(
             resolvedSymbol
-          )}?tf=60d&unit=usd&limit=500`,
+          )}?tf=7d&unit=usd&limit=500`,
           { cache: "no-store" }
         );
         if (response.ok) {
           const data = await response.json();
           if (data?.success && Array.isArray(data.data) && data.data.length) {
-            return data.data.map(mapApiTradeToLocal);
+            const cutoff = Date.now() - TRADE_LOOKBACK_MS;
+            return data.data
+              .map(mapApiTradeToLocal)
+              .filter((trade: { time: string; }) => {
+                const ts = Date.parse(trade.time);
+                return Number.isFinite(ts) && ts >= cutoff;
+              })
+              .slice(0, MAX_TRADES);
           }
         }
       }
@@ -741,6 +758,7 @@ const parseTradesFromStreamMessage = async (
 
             // console.log(`✨ Parsed ${tradesFromMessage.length} trades (snapshot: ${isSnapshot})`);
 
+            hasLiveTradesRef.current = true;
             setTrades((prev) => {
               if (isSnapshot) {
                 return tradesFromMessage.slice(0, MAX_TRADES);
@@ -756,7 +774,20 @@ const parseTradesFromStreamMessage = async (
               // ✅ force UI to show newest trades
               setCurrentPage(1);
 
-              return [...incoming, ...prev].slice(0, MAX_TRADES);
+              const merged = [...incoming, ...prev];
+              const unique = new Map<string, Trade>();
+              for (const trade of merged) {
+                const key = tradeKey(trade);
+                if (!unique.has(key)) unique.set(key, trade);
+              }
+              return Array.from(unique.values())
+                .sort((a, b) => {
+                  const ta = Date.parse(a.time);
+                  const tb = Date.parse(b.time);
+                  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return 0;
+                  return tb - ta;
+                })
+                .slice(0, MAX_TRADES);
             });
 
             
@@ -826,15 +857,20 @@ const parseTradesFromStreamMessage = async (
   useEffect(() => {
     if (!tokenId) return;
     let cancelled = false;
+    hasLiveTradesRef.current = false;
 
     const loadInitialTrades = async () => {
       setLoading(true);
       setTrades([]);
       const initialTrades = await fetch24hTradesFromApi();
       if (cancelled) return;
+      if (hasLiveTradesRef.current) {
+        setLoading(false);
+        return;
+      }
 
       if (initialTrades.length > 0) {
-        setTrades(initialTrades);
+        setTrades(initialTrades.slice(0, MAX_TRADES));
         setLastUpdated(new Date());
       }
       if (cancelled) return;
@@ -953,6 +989,18 @@ const parseTradesFromStreamMessage = async (
       )
     );
     preloadTokenData(tokenIds);
+  }, [trades]);
+
+  useEffect(() => {
+    const counts = { whale: 0, shark: 0, shrimp: 0 };
+    for (const trade of trades) {
+      if (trade.class === "whale") counts.whale += 1;
+      else if (trade.class === "shark") counts.shark += 1;
+      else if (trade.class === "shrimp") counts.shrimp += 1;
+    }
+    setWhaleCount(counts.whale);
+    setSharkCount(counts.shark);
+    setShrimpCount(counts.shrimp);
   }, [trades]);
 
   // Track previous trades length for detecting new trades
