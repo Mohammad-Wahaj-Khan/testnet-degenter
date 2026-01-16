@@ -59,6 +59,13 @@ const NewListing: React.FC<{ LatestListing: DashboardToken[] }> = ({
     return denom.substring(0, 16) + "..." + denom.slice(-8);
   };
 
+  const getDisplayName = (token: DashboardToken) => {
+    const name = token.name || "";
+    const symbol = token.symbol || "";
+    if (name.toLowerCase().includes("coin") && symbol) return symbol;
+    return name || symbol;
+  };
+
   // Sort tokens by creationTime in descending order (newest first)
   const sortedTokens = [...LatestListing].sort((a, b) => {
     const timeA = new Date(a.creationTime || 0).getTime();
@@ -109,7 +116,7 @@ const NewListing: React.FC<{ LatestListing: DashboardToken[] }> = ({
             <div className="flex 2xl:flex-row flex-col items-center gap-8 w-full">
               <Image
                 src={token.image || "/Bitcoin.webp"}
-                alt={token.name}
+                alt={getDisplayName(token)}
                 className="rounded-lg bg-white"
                 width={120}
                 height={120}
@@ -120,7 +127,7 @@ const NewListing: React.FC<{ LatestListing: DashboardToken[] }> = ({
                   <div className="flex flex-col justify-center">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <div className="text-white font-medium text-[1.35rem]">
-                        {token.name}
+                        {getDisplayName(token)}
                       </div>
                       {isTokenNew(token.creationTime) && <NewTokenBadge />}
                     </div>
