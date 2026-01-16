@@ -14,8 +14,8 @@ export default function Home() {
             linear-gradient(
               120deg,
               #14624F 0%,
-              #39C8A6 36.7%,
-              #FA4E30 66.8%,
+              #29a789ff 36.7%,
+              #bd361eff 66.8%,
               #2D1B45 100%
             )
           `,

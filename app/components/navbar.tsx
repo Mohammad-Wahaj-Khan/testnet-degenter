@@ -5,9 +5,17 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Lock, Menu, Search, X } from "lucide-react";
+import {
+  FaSearch,
+  FaGem,
+  FaLink,
+  FaTrophy,
+  FaChartLine,
+  FaPlusCircle,
+} from "react-icons/fa";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import NewImg from '../../public/newimgyellow.png';
+import NewImg from "../../public/newimgyellow.png";
 
 // Assets (design unchanged)
 import WalletImg from "../../public/wallet.svg";
@@ -27,6 +35,7 @@ const API_BASE = API_BASE_URL;
 const PROFILE_FOCUS_SEEN_KEY = "degenterProfileFocusSeen";
 const LEADERBOARD_CLOSED_KEY = "degenterLeaderboardPopupClosed";
 const LEADERBOARD_CLOSED_EVENT = "degenter:leaderboard-closed";
+const GUEST_HANDLE_KEY = "degenterGuestProfileHandle";
 
 /* ============================== Types ============================== */
 type ResultType = "token";
@@ -156,6 +165,8 @@ export default function Navbar() {
   const [searchResults, setSearchResults] = useState<Token[]>([]);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const [showProfileIntro, setShowProfileIntro] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [guestHandle, setGuestHandle] = useState("");
   // Refs for input elements
   const inputRefModal = useRef<HTMLInputElement>(null);
 
@@ -299,30 +310,29 @@ export default function Navbar() {
     }
   };
 
-  const maybeDismissProfileIntro = () => {
-    if (showProfileIntro) {
-      dismissProfileIntro();
-    }
-  };
+  const apiKey =
+    process.env.NEXT_PUBLIC_X_API_KEY ||
+    process.env.NEXT_PUBLIC_API_KEY ||
+    process.env.NEXT_PUBLIC_DEGENTER_API_KEY ||
+    "";
 
   // Handle profile click with wallet check
   const handleProfileClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    
+
     // Dismiss profile intro if it's open
     if (showProfileIntro) {
       dismissProfileIntro();
       return;
     }
-    
-    // Show profile intro if wallet is not connected
+
     if (!address) {
       setShowProfileIntro(true);
       return;
     }
-    
-    // If wallet is connected, navigate to portfolio
-    router.push('/portfolio');
+
+    const query = `handle=${address}`;
+    router.push(`/profile?${query}`);
   };
 
   const openSearchModal = () => {
@@ -386,6 +396,55 @@ export default function Navbar() {
     }
   }, [address]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const loadGuestHandle = () => {
+      const storedHandle = localStorage.getItem(GUEST_HANDLE_KEY) || "";
+      setGuestHandle(storedHandle);
+    };
+    loadGuestHandle();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === GUEST_HANDLE_KEY) {
+        setGuestHandle(event.newValue || "");
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  useEffect(() => {
+    const handle = address || guestHandle;
+    if (!handle) {
+      setProfileImageUrl(null);
+      return;
+    }
+
+    let isActive = true;
+    const loadProfileImage = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/profiles/${handle}`, {
+          headers: apiKey ? { "x-api-key": apiKey } : undefined,
+        });
+        if (!response.ok) {
+          if (isActive) setProfileImageUrl(null);
+          return;
+        }
+        const json = await response.json();
+        const imageUrl = json?.data?.image_url ?? json?.image_url ?? null;
+        if (isActive) {
+          setProfileImageUrl(imageUrl);
+        }
+      } catch {
+        if (isActive) setProfileImageUrl(null);
+      }
+    };
+
+    loadProfileImage();
+    return () => {
+      isActive = false;
+    };
+  }, [address, guestHandle, apiKey]);
+
   /* ================================ Render ================================ */
   return (
     <header className=" top-0 z-50 w-full">
@@ -431,15 +490,16 @@ export default function Navbar() {
               <nav className="flex items-center gap-4 xl:gap-10">
                 <FindTradersNavItem />
                 <ExploreNavItem />
+                <NavItem label="Wallet Tracker" hasDropdown />
                 <NavItem label="Earn" hasDropdown />
                 <NavItem label="Terminal" hasDropdown />
                 <NavItem label="Resources" hasDropdown />
-                <LeaderboardNavItem />
+                {/* <LeaderboardNavItem /> */}
               </nav>
             </div>
 
             <div className="flex items-center gap-3 sm:gap-2 md:gap-3">
-              {/* <div className="relative">
+              <div className="relative">
                 <button
                   ref={profileButtonRef}
                   onClick={handleProfileClick}
@@ -447,14 +507,22 @@ export default function Navbar() {
                   aria-label="Portfolio"
                   type="button"
                 >
-                  <Image
-                    src={ProfileImg}
-                    alt="Profile"
-                    width={22}
-                    height={22}
-                    className="w-5 h-5 object-contain select-none"
-                    draggable={false}
-                  />
+                  {profileImageUrl ? (
+                    <img
+                      src={profileImageUrl}
+                      alt="Profile"
+                      className="h-6 w-6 rounded-full object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src={ProfileImg}
+                      alt="Profile"
+                      width={22}
+                      height={22}
+                      className="w-5 h-5 object-contain select-none"
+                      draggable={false}
+                    />
+                  )}
                 </button>
                 {showProfileIntro && (
                   <div
@@ -479,13 +547,16 @@ export default function Navbar() {
                     {!address ? (
                       <div className="mt-4 text-center">
                         <p className="text-sm text-white/80 mb-4">
-                          Connect your wallet to view your portfolio, track achievements, and manage your profile.
+                          Create your profile with a unique ID and update it anytime.
                         </p>
                         <button
-                          onClick={() => connect?.()}
+                          onClick={() => {
+                            dismissProfileIntro();
+                            router.push("/profile");
+                          }}
                           className="w-full py-2 bg-[#32816E] rounded-md hover:bg-[#3a9a82] transition-colors flex items-center justify-center gap-2"
                         >
-                          <span>Connect Wallet</span>
+                          <span>Create Profile</span>
                         </button>
                       </div>
                     ) : (
@@ -512,7 +583,7 @@ export default function Navbar() {
               <span
                 aria-hidden
                 className="mx-2 sm:mx-1 h-6 sm:h-7 w-[1px] bg-white"
-              /> */}
+              />
               {!address ? (
                 <button
                   onClick={handleWalletClick}
@@ -595,8 +666,9 @@ export default function Navbar() {
 
             {/* Navigation links */}
             <nav className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">
-              <NavItem label="Find Traders" />
-              <NavItem label="Explore" hasDropdown />
+              <FindTradersNavItem />
+              <ExploreNavItem />
+              <NavItem label="Wallet Tracker" hasDropdown />
               <NavItem label="Earn" hasDropdown />
               <NavItem label="Terminal" hasDropdown />
               <NavItem label="Resources" hasDropdown />
@@ -682,28 +754,203 @@ function FindTradersNavItem({ mobile }: { mobile?: boolean }) {
     </Link>
   );
 }
+
 function ExploreNavItem({ mobile }: { mobile?: boolean }) {
   const badgeWidth = 35;
   const badgeHeight = 18;
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const menuItems = [
+    {
+      icon: FaSearch,
+      title: "Find Trades",
+      subtitle: "Find the best trading opportunities",
+      href: "/trades",
+      locked: false,
+    },
+    {
+      icon: FaGem,
+      title: "Find Gems",
+      subtitle: "Discover hidden gems",
+      href: "#",
+      locked: true,
+    },
+    {
+      icon: FaLink,
+      title: "Zigscan Explorer",
+      subtitle: "Explore the blockchain",
+      href: "https://testnet.zigscan.org",
+      locked: false,
+      external: true,
+    },
+    {
+      icon: FaTrophy,
+      title: "Leaderboard",
+      subtitle: "Top traders and tokens",
+      href: "https://leaderboard.degenter.io",
+      locked: false,
+      external: true,
+      isNew: true,
+    },
+    {
+      icon: FaChartLine,
+      title: "Insight",
+      subtitle: "Market insights and analytics",
+      href: "/insights",
+      locked: false,
+    },
+    {
+      icon: FaPlusCircle,
+      title: "New Listing",
+      subtitle: "Recently listed tokens",
+      href: "/",
+      locked: false,
+    },
+  ];
+
+  if (mobile) {
+    return (
+      <div className="w-full">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex w-full items-center justify-between px-2 py-1 text-left text-white"
+        >
+          <span className="flex items-center gap-2">
+            <span>Explore</span>
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${
+              isOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+        {isOpen && (
+          <div className="mt-2 rounded-lg bg-black p-4 backdrop-blur-sm">
+            <div className="grid grid-cols-2 gap-4">
+              {menuItems.map((item, index) => (
+                <Link
+                  key={index}
+                  href={item.href}
+                  target={item.external ? "_blank" : "_self"}
+                  rel={item.external ? "noreferrer noopener" : ""}
+                  className={`group flex items-start space-x-3 rounded-lg p-3 transition-colors ${
+                    item.locked ? "" : "hover:bg-gray-800"
+                  }`}
+                  onClick={() => setIsOpen(false)}
+                  aria-disabled={item.locked}
+                >
+                  <item.icon className="text-2xl text-gray-400 group-hover:text-yellow-400 transition-colors" />
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <span className="text-sm font-medium text-white">
+                        {item.title}
+                      </span>
+                      {item.locked && (
+                        <Lock className="ml-2 h-3 w-3 text-gray-400" />
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-400">
+                      {item.subtitle}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <Link
-      href="https://testnet.zigscan.org"
-      target="_blank"
-      rel="noreferrer"
-      className={`flex items-center gap-2 ${mobile ? "px-2 py-1" : ""}`}
-    >
-      <NavItem label="Explore" />
-      <span className="flex-shrink-0">
-        <Image
-          src={NewImg}
-          alt="New Explorer badge"
-          width={badgeWidth}
-          height={badgeHeight}
-          className="h-6 w-auto select-none leaderboard-badge"
-          draggable={false}
-          priority
-        />
-      </span>
-    </Link>
+    <div className="relative" ref={containerRef}>
+      <div
+        className="flex items-center relative"
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+      >
+        <button className="flex items-center gap-2 px-3 py-2 text-white rounded-lg transition-colors  group">
+          <div className="flex items-center">
+            <span className="relative">Explore</span>
+            <Image
+              src={NewImg}
+              alt="New Find Traders badge"
+              width={badgeWidth}
+              height={badgeHeight}
+              className="h-6 w-auto select-none leaderboard-badge"
+              draggable={false}
+              priority
+            />
+          </div>
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${
+              isOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      </div>
+
+      {isOpen && (
+        <div
+          className="absolute left-0 mt-1 w-[600px] rounded-lg bg-black border border-gray-800 p-4 shadow-2xl z-[1000]"
+          onMouseEnter={() => setIsOpen(true)}
+          onMouseLeave={() => setIsOpen(false)}
+        >
+          <div className="grid grid-cols-2 gap-3">
+            {menuItems.map((item, index) => (
+              <Link
+                key={index}
+                href={item.href}
+                target={item.external ? "_blank" : "_self"}
+                rel={item.external ? "noreferrer noopener" : ""}
+                className={`group flex items-start space-x-3 rounded-lg p-3 transition-colors ${
+                  item.locked ? "" : "hover:bg-gray-800"
+                }`}
+                aria-disabled={item.locked}
+                onClick={() => setIsOpen(false)}
+              >
+                <div className="flex-shrink-0 p-2 rounded-lg bg-black group-hover:bg-yellow-500/10 transition-colors">
+                  <item.icon className="text-xl text-gray-400 group-hover:text-yellow-400 transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-white truncate">
+                      {item.title}
+                    </span>
+                    {item.isNew && (
+                      <span className="relative ml-2 flex h-4 w-2 items-center">
+                        <span className="absolute inline-flex h-2 w-2 rounded-full bg-yellow-400 opacity-75"></span>
+                        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-yellow-400"></span>
+                      </span>
+                    )}
+                    {item.locked && (
+                      <Lock className="ml-2 h-3 w-3 text-gray-400" />
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-400">
+                    {item.subtitle}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

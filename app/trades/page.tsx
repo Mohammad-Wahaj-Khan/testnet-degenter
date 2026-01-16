@@ -8,7 +8,8 @@ import Navbar from "@/app/components/navbar";
 import TopMarketToken from "@/app/components/TopMarketToken";
 import NotFoundPage from "@/app/not-found";
 import AssetsFilter from "./components/AssetsFilter";
-import Trades, { TokenOption, TradesFilter, Trade } from "./components/Trades";
+import TradesComponent from "./components/Trades";
+import type { TokenOption, TradesFilter, Trade } from "./components/Trades";
 import FilterTradesTop from "./components/FindTradesTop";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -101,7 +102,7 @@ const getDefaultFilters = (): TradesFilter => ({
   timeRange: "24H",
   valueRange: "",
   tokenDenom: "",
-  wallet: "",
+  wallet: ""
 });
 
 /* ---------------- Main Page ---------------- */
@@ -111,24 +112,27 @@ export default function FindTrades() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(true);
+  const [availableTokens, setAvailableTokens] = useState<TokenOption[]>([]);
+  const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
+  const [tokenOptions, setTokenOptions] = useState<TokenOption[]>([]);
   const [activeTab, setActiveTab] = useState<
     "trades" | "holders" | "security" | "mySwaps" | "topTrades"
   >("trades");
-  const [filters, setFilters] = useState<TradesFilter>(getDefaultFilters());
-  const [tokenOptions, setTokenOptions] = useState<TokenOption[]>([]);
+  const [filters, setFilters] = useState<TradesFilter>(() => getDefaultFilters());
   const [filtersVisible, setFiltersVisible] = useState(true);
   const [filteredTradesForExport, setFilteredTradesForExport] = useState<Trade[]>([]);
 
-  const updateFilters = useCallback((values: Partial<TradesFilter>) => {
-    setFilters((prev) => ({ ...prev, ...values }));
+  const updateFilters = useCallback((updates: Partial<TradesFilter>) => {
+    setFilters(prev => ({ ...prev, ...updates }));
   }, []);
 
   const handleResetFilters = useCallback(() => {
     setFilters(getDefaultFilters());
   }, []);
 
-  const handleAvailableTokens = useCallback((options: TokenOption[]) => {
-    setTokenOptions(options);
+  const handleAvailableTokens = useCallback((tokens: TokenOption[]) => {
+    setAvailableTokens(tokens);
+    setTokenOptions(tokens);
   }, []);
   const toggleFiltersOpen = useCallback(() => {
     setFiltersVisible((prev) => !prev);
@@ -327,10 +331,10 @@ export default function FindTrades() {
               />
             </div>
             <div className="flex-1 animate-table">
-              <Trades
+              <TradesComponent
                 filters={filters}
-                onAvailableTokens={handleAvailableTokens}
-                onFilteredTradesChange={handleFilteredTradesUpdate}
+                onAvailableTokens={setAvailableTokens}
+                onFilteredTradesChange={setFilteredTrades}
               />
             </div>
           </section>

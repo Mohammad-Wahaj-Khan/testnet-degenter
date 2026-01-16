@@ -27,11 +27,10 @@ const nextConfig = {
       child_process: false,
     };
 
-    // Force the lightweight browser build of pino to avoid thread-stream test deps in Next bundler
     config.resolve.alias = {
       ...config.resolve.alias,
       pino: "pino/browser",
-      ...(isServer ? {} : { "pino-pretty": false }), // suppress pino-pretty warning on the client
+      ...(isServer ? {} : { "pino-pretty": false }),
     };
 
     return config;
@@ -95,6 +94,18 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'pbs.twimg.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 's2.coinmarketcap.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 't3.ftcdn.net',
         port: '',
         pathname: '/**',
       },

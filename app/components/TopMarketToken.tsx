@@ -18,6 +18,38 @@ interface Token {
   holders: string;
 }
 
+const FALLBACK_TOKEN_IMAGE = "/zigicon.png";
+const COINMARKETCAP_HOST = "s2.coinmarketcap.com";
+const BUBBLEMAP_API_BASE = "https://dex-api.cryptocomics.cc";
+
+const getSafeTokenImage = (imageUri?: string) => {
+  if (!imageUri) return FALLBACK_TOKEN_IMAGE;
+  if (imageUri.startsWith("/")) return imageUri;
+  try {
+    const { hostname } = new URL(imageUri);
+    if (hostname === COINMARKETCAP_HOST) return FALLBACK_TOKEN_IMAGE;
+  } catch {
+    return FALLBACK_TOKEN_IMAGE;
+  }
+  return imageUri;
+};
+
+const buildPoolImageMap = (pools: any[]) => {
+  const map = new Map<string, string>();
+  pools.forEach((pool) => {
+    const imageUri = pool?.image_uri;
+    if (!imageUri) return;
+    const symbol =
+      pool?.meta_symbol ||
+      (pool?.primary_denom?.split(".").pop() ?? pool?.primary_denom);
+    if (symbol) map.set(String(symbol).toLowerCase(), imageUri);
+    if (pool?.primary_denom) {
+      map.set(String(pool.primary_denom).toLowerCase(), imageUri);
+    }
+  });
+  return map;
+};
+
 export default function TopMarketToken() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -34,6 +66,19 @@ export default function TopMarketToken() {
     const fetchTokens = async () => {
       try {
         setLoading(true);
+        let poolImageMap = new Map<string, string>();
+        try {
+          const poolsRes = await fetch(
+            `${BUBBLEMAP_API_BASE}/api/v1/pools?limit=300`,
+            { headers: { Accept: "application/json" } }
+          );
+          if (poolsRes.ok) {
+            const poolsJson = await poolsRes.json();
+            poolImageMap = buildPoolImageMap(poolsJson?.pools ?? []);
+          }
+        } catch {
+          poolImageMap = new Map<string, string>();
+        }
         const response = await tokenAPI.getTopMarketTokens(
           "24h", // bucket
           "best", // priceSource
@@ -75,7 +120,13 @@ export default function TopMarketToken() {
         // );
 
         // Transform API data to match component interface
-        const tokensData: Token[] = filteredTokens.map((token: APIToken) => ({
+        const tokensData: Token[] = filteredTokens.map((token: APIToken) => {
+          const symbolKey = token.symbol?.toLowerCase() ?? "";
+          const denomKey = token.denom?.toLowerCase() ?? "";
+          const poolImage =
+            poolImageMap.get(symbolKey) || poolImageMap.get(denomKey);
+          const resolvedImage = getSafeTokenImage(poolImage || token.imageUri);
+          return {
           id: token.tokenId?.toString() || "",
           symbol: token.symbol || "",
           name: token.name || "",
@@ -83,11 +134,12 @@ export default function TopMarketToken() {
           price_change_percentage_24h: token.change24hPct || 0,
           market_cap: token.mcapUsd || token.mcapNative || 0,
           total_volume: token.volUsd || token.volNative || 0,
-          image: token.imageUri || "",
+          image: resolvedImage,
           tx: token.tx || 0,
           denom: token.denom || "",
           holders: token.holders?.toString() || "0",
-        }));
+          };
+        });
 
         // console.log(
         //   "Final tokens data:",

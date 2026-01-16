@@ -129,7 +129,7 @@ export default function RootLayout({
     <html lang="en">
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <link rel="manifest" href="/manifest.json" />
-      <body className={`${kanit.className}`}>
+      <body className={`${kanit.className}`} suppressHydrationWarning>
         <ImageFallbackHandler />
         <Providers>{children}
           {/* <WalletProvider>{children}</WalletProvider> */}
