@@ -4,6 +4,7 @@ import React from "react";
 import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../../../config/chain";
 import { API_BASE_URL } from "@/lib/api";
+import { Bar, BarChart, Line, ComposedChart, ResponsiveContainer, XAxis, YAxis, Tooltip, ReferenceLine } from "recharts";
 
 export const analyzerTabs = [
   { id: "trading", label: "Trading PNL" },
@@ -64,21 +65,39 @@ export default function WalletAnalyzer({
   const { address: connectedAddress } = useChain(CHAIN_NAME || "zigchain-1");
   const address = addressOverride?.trim() || connectedAddress;
   const apiEndpoints = React.useMemo(
-    () => [
-      normalizeWalletApiBase(process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API),
-    ],
+    () => [normalizeWalletApiBase(process.env.NEXT_PUBLIC_WALLET_HOLDINGS_API)],
     []
   );
   const [distribution, setDistribution] = React.useState<
     { label: string; count: number }[]
   >([]);
   const [distributionLoading, setDistributionLoading] = React.useState(false);
-  const [distributionError, setDistributionError] = React.useState<string | null>(
-    null
-  );
+  const [distributionError, setDistributionError] = React.useState<
+    string | null
+  >(null);
   const [pnlTokens, setPnlTokens] = React.useState<PnlTokenItem[]>([]);
   const [pnlLoading, setPnlLoading] = React.useState(false);
   const [pnlError, setPnlError] = React.useState<string | null>(null);
+
+  // PNL Summary state
+  const [pnlSummary, setPnlSummary] = React.useState<{
+    totalPnl: number;
+    winCount: number;
+    lossCount: number;
+    winRate: number;
+  }>({ totalPnl: 0, winCount: 0, lossCount: 0, winRate: 0 });
+
+  // PNL Series state
+  const [pnlSeries, setPnlSeries] = React.useState<{
+    points: Array<{ 
+      t: string; 
+      realized_pnl_usd: number;
+      total_pnl_usd: number;
+      pnl: number;
+    }>;
+    loading: boolean;
+    error: string | null;
+  }>({ points: [], loading: false, error: null });
 
   const safeNumber = (value: unknown): number => {
     if (typeof value === "number") return value;
@@ -124,9 +143,111 @@ export default function WalletAnalyzer({
     throw new Error(
       lastError
         ? `Unable to load ${label} (${lastError})`
-      : `Unable to load ${label}`
-  );
+        : `Unable to load ${label}`
+    );
   };
+
+  // Calculate PNL summary from series data
+  const updatePnlSummary = (points: Array<{pnl: number}>) => {
+    const summary = points.reduce((acc, point) => {
+      const pnl = point.pnl || 0;
+      if (pnl > 0) acc.winCount++;
+      if (pnl < 0) acc.lossCount++;
+      acc.totalPnl += pnl;
+      return acc;
+    }, { totalPnl: 0, winCount: 0, lossCount: 0 });
+    
+    const totalTrades = summary.winCount + summary.lossCount;
+    const winRate = totalTrades > 0 ? (summary.winCount / totalTrades) * 100 : 0;
+    
+    setPnlSummary({
+      totalPnl: summary.totalPnl,
+      winCount: summary.winCount,
+      lossCount: summary.lossCount,
+      winRate: parseFloat(winRate.toFixed(2))
+    });
+  };
+
+  // Fetch PNL series data
+  React.useEffect(() => {
+    if (!showTradingDetails || !address) {
+      setPnlSeries({ points: [], loading: false, error: null });
+      setPnlSummary({ totalPnl: 0, winCount: 0, lossCount: 0, winRate: 0 });
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+
+    const loadPnlSeries = async () => {
+      setPnlSeries((prev) => ({ ...prev, loading: true, error: null }));
+
+      try {
+        const win = timeframeToWin[timeframe];
+        const response = (await fetchFromEndpoints(
+          apiEndpoints,
+          `wallets/${encodeURIComponent(
+            address
+          )}/pnl/series?win=${encodeURIComponent(win)}&tf=1d`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+            headers: { Accept: "application/json" },
+          },
+          "pnl series"
+        )) as { 
+          points: Array<{ 
+            t: string; 
+            realized_pnl_usd: number;
+            total_pnl_usd: number;
+          }>;
+          win: string;
+          tf: string;
+          unrealized_pnl_usd: number;
+        };
+
+        if (!active) return;
+
+        // Process points to calculate daily PNL changes
+        let prevTotal = 0;
+        const processedPoints = (response.points || []).map((point, index) => {
+          const currentTotal = Number(point.total_pnl_usd) || 0;
+          // For the first point, use the total as is
+          // For subsequent points, calculate the difference from previous total
+          const dailyChange = index === 0 ? currentTotal : currentTotal - prevTotal;
+          prevTotal = currentTotal;
+          
+          return {
+            ...point,
+            pnl: dailyChange
+          };
+        });
+        
+        setPnlSeries({
+          points: processedPoints,
+          loading: false,
+          error: null,
+        });
+        updatePnlSummary(processedPoints);
+      } catch (err) {
+        if (!active) return;
+        const message =
+          err instanceof Error ? err.message : "Failed to load PNL series";
+        setPnlSeries({
+          points: [],
+          loading: false,
+          error: message,
+        });
+      }
+    };
+
+    loadPnlSeries();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [address, apiEndpoints, showTradingDetails, timeframe]);
 
   React.useEffect(() => {
     if (!showTradingDetails) return;
@@ -453,7 +574,7 @@ export default function WalletAnalyzer({
       label: "Avg Win Cost",
       value: formatCurrencySmart(avgWinCost),
       color: "text-white",
-    }
+    },
   ];
 
   const suspiciousActions = [
@@ -482,7 +603,7 @@ export default function WalletAnalyzer({
       label: "Scam/Rug tokens",
       value: "0.00%",
       color: "text-[#ff4d4d]",
-    }
+    },
   ];
 
   return (
@@ -530,12 +651,36 @@ export default function WalletAnalyzer({
           <div className="lg:col-span-9 space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:auto-rows-fr mt-6">
               {/* Trading PNL / Win Rate Section */}
-              <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] overflow-hidden shadow-2xl h-full">
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] overflow-hidden shadow-2xl h-full flex flex-col">
+                {/* PNL Summary Line */}
+                <div className="px-4 pt-4 pb-2 border-b border-white/5">
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <div className="flex items-center gap-2">
+                      <span>Total PNL:</span>
+                      <span className={`font-medium ${pnlSummary.totalPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {pnlSummary.totalPnl >= 0 ? '+' : ''}{pnlSummary.totalPnl.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1">
+                        <span className="text-green-500">▲</span>
+                        <span>{pnlSummary.winCount} Wins</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-red-500">▼</span>
+                        <span>{pnlSummary.lossCount} Losses</span>
+                      </div>
+                      <div className="text-amber-400">
+                        {pnlSummary.winRate}% Win Rate
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 {/* Header Row */}
                 <div className="flex items-center justify-between px-5 pt-4 pb-2">
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-lg font-bold tracking-tight text-white">
-                      Win Rate
+                      PNL History
                     </h3>
                     <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-zinc-800 text-[10px] text-zinc-400">
                       i
@@ -565,6 +710,122 @@ export default function WalletAnalyzer({
                       />
                     </svg>
                   </div>
+                </div>
+
+                {/* PNL Chart */}
+                <div className="flex-1 p-2 h-32">
+                  {pnlSeries.loading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="animate-pulse text-sm text-gray-400">
+                        Loading chart...
+                      </div>
+                    </div>
+                  ) : pnlSeries.error ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-sm text-red-400">
+                        Chart unavailable
+                      </div>
+                    </div>
+                  ) : pnlSeries.points.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={pnlSeries.points}>
+                        <defs>
+                          <linearGradient id="colorWin" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#4ADE80" stopOpacity={0.8} />
+                            <stop offset="100%" stopColor="#4ADE80" stopOpacity={0.1} />
+                          </linearGradient>
+                          <linearGradient id="colorLoss" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#F64F39" stopOpacity={0.8} />
+                            <stop offset="100%" stopColor="#F64F39" stopOpacity={0.1} />
+                          </linearGradient>
+                          <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#60A5FA" stopOpacity={0.8} />
+                            <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.8} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis
+                          dataKey="t"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fontSize: 10, fill: "#6B7280" }}
+                          tickFormatter={(value) => {
+                            const date = new Date(value);
+                            return `${date.getDate()}/${date.getMonth() + 1}`;
+                          }}
+                          padding={{ left: 10, right: 10 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fontSize: 10, fill: "#6B7280" }}
+                          tickFormatter={(value) => `$${Math.abs(Number(value)).toFixed(2)}`}
+                          width={40}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#1F2937",
+                            border: "1px solid #374151",
+                            borderRadius: "0.5rem",
+                            fontSize: "12px",
+                          }}
+                          labelFormatter={(value) => {
+                            const date = new Date(value);
+                            return date.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric"
+                            });
+                          }}
+                          formatter={(value: number, name: string, props: any) => {
+                            const isPositive = props.payload.pnl >= 0;
+                            const prefix = isPositive ? '+' : '-';
+                            return [
+                              `${prefix}$${Math.abs(Number(value)).toFixed(4)}`,
+                              isPositive ? 'Profit' : 'Loss'
+                            ];
+                          }}
+                        />
+                        {/* Background line for cumulative PNL */}
+                        <Line
+                          type="monotone"
+                          dataKey="total_pnl_usd"
+                          stroke="url(#lineGradient)"
+                          strokeWidth={2}
+                          dot={false}
+                          strokeDasharray="3 3"
+                          activeDot={false}
+                        />
+                        
+                        {/* Main bars */}
+                        <Bar
+                          dataKey="pnl"
+                          radius={[2, 2, 0, 0]}
+                          barSize={4}
+                        >
+                          {pnlSeries.points.map((entry, index) => (
+                            <rect
+                              key={`bar-${index}`}
+                              x={index * 6}
+                              y={entry.pnl >= 0 ? 100 - (entry.pnl * 100 / (Math.max(...pnlSeries.points.map(p => Math.abs(p.pnl))) || 1)) : 100}
+                              width={4}
+                              height={Math.abs(entry.pnl) * 100 / (Math.max(...pnlSeries.points.map(p => Math.abs(p.pnl))) || 1)}
+                              fill={entry.pnl >= 0 ? 'url(#colorWin)' : 'url(#colorLoss)'}
+                              rx={2}
+                            />
+                          ))}
+                        </Bar>
+                        
+                        {/* Zero line */}
+                        <ReferenceLine y={0} stroke="#4B5563" strokeWidth={1} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-sm text-gray-400">
+                        No data available
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-3 border-y border-white/5 bg-black/20">
@@ -674,11 +935,13 @@ export default function WalletAnalyzer({
                           {distributionError}
                         </div>
                       )}
-                      {!distributionLoading && !distributionError && !distribution.length && (
-                        <div className="text-zinc-400 text-[12px]">
-                          No distribution data available.
-                        </div>
-                      )}
+                      {!distributionLoading &&
+                        !distributionError &&
+                        !distribution.length && (
+                          <div className="text-zinc-400 text-[12px]">
+                            No distribution data available.
+                          </div>
+                        )}
                       {distribution.map((bucket) => {
                         const percent =
                           distributionTotal > 0

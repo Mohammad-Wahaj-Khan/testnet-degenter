@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Profile } from "../lib/profile-api";
+import { uploadProfileImage } from "../lib/profile-api";
 
 const DEFAULT_IMAGE_URL =
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSuqOuCqB99JERXN81cgLxhxO7-ktwDjh5SAA&s";
@@ -10,6 +11,7 @@ type CreateProfileModalProps = {
   onSave: (payload: Profile) => Promise<void>;
   walletAddress?: string;
   initialProfile?: Partial<Profile>;
+  apiKey?: string;
 };
 
 const parseTags = (value: string) =>
@@ -24,6 +26,7 @@ export default function CreateProfileModal({
   onSave,
   walletAddress,
   initialProfile,
+  apiKey,
 }: CreateProfileModalProps) {
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -35,11 +38,18 @@ export default function CreateProfileModal({
   const [tagsInput, setTagsInput] = useState("");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const resolvedHandle = useMemo(() => {
-    if (handle.trim()) return handle.trim();
-    return walletAddress?.trim() ?? "";
-  }, [handle, walletAddress]);
+  // Only use the handle if it doesn't look like a wallet address
+  // const resolvedHandle = useMemo(() => {
+  //   const trimmedHandle = handle.trim();
+  //   // Check if the handle looks like a wallet address (0x followed by 40 hex characters)
+  //   if (/^0x[a-fA-F0-9]{40}$/.test(trimmedHandle)) {
+  //     return "";
+  //   }
+  //   return trimmedHandle;
+  // }, [handle]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -54,8 +64,18 @@ export default function CreateProfileModal({
     setError("");
   }, [initialProfile, isOpen]);
 
-  const handleImageUpload = (file?: File | null) => {
+  const handleImageUpload = async (file?: File | null) => {
     if (!file) return;
+
+    // Check if file is SVG
+    if (file.type === "image/svg+xml") {
+      alert(
+        "SVG files are not supported. Please upload an image in a different format."
+      );
+      return;
+    }
+
+    // Create a preview of the image
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
@@ -63,46 +83,65 @@ export default function CreateProfileModal({
       }
     };
     reader.readAsDataURL(file);
+
+    // If we have a user ID (editing existing profile), upload to server
+    if (initialProfile?.user_id) {
+      try {
+        setIsUploading(true);
+        const result = await uploadProfileImage(
+          initialProfile.user_id,
+          file,
+          process.env.NEXT_PUBLIC_X_API_KEY || ""
+        );
+        setImageUrl(result.image_url);
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        alert("Failed to upload image. Please try again.");
+      } finally {
+        setIsUploading(false);
+      }
+    }
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError("");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-    const tags = parseTags(tagsInput);
-    if (!resolvedHandle) {
-      setError("Handle is required.");
-      return;
-    }
-    if (tags.length < 1 || tags.length > 4) {
-      setError("Tags must be between 1 and 4.");
+    if (!handle.trim()) {
+      setError("Handle is required");
       return;
     }
 
-    setIsSaving(true);
     try {
-      await onSave({
-        handle: resolvedHandle,
-        display_name: displayName || resolvedHandle,
-        bio,
-        image_url: imageUrl || DEFAULT_IMAGE_URL,
-        website: website || "none",
-        twitter: twitter || "none",
-        telegram: telegram || "none",
-        tags,
-        wallets: walletAddress
-          ? [
-              {
-                address: walletAddress,
-                label: "main",
-                is_primary: true,
-              },
-            ]
-          : [],
-      });
+      setIsSaving(true);
+      setError("");
+
+      // Create the profile data
+      const profileData = {
+        handle: handle.trim(),
+        display_name: displayName.trim() || undefined,
+        bio: bio.trim() || undefined,
+        image_url: imageUrl || undefined,
+        website: website.trim() || undefined,
+        twitter: twitter.trim() || undefined,
+        telegram: telegram.trim() || undefined,
+        tags: parseTags(tagsInput),
+        wallets: initialProfile?.wallets || [],
+      };
+
+      console.log("Submitting profile data:", profileData);
+
+      // Call the save function from props
+      await onSave(profileData);
+
+      // Close the modal on success
       onClose();
-    } catch {
-      setError("Unable to save profile. Please try again.");
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save profile";
+      setError(`Error: ${errorMessage}`);
+      // Re-throw the error so the parent component can handle it if needed
+      throw error;
     } finally {
       setIsSaving(false);
     }
@@ -131,21 +170,40 @@ export default function CreateProfileModal({
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           <div className="grid gap-4 md:grid-cols-[160px,1fr] md:items-center">
-            <div className="h-28 w-28 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900">
+            <div
+              className="relative h-28 w-28 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 cursor-pointer group"
+              onClick={() => fileInputRef.current?.click()}
+              title="Click to upload a new profile picture"
+            >
               <img
                 src={imageUrl || DEFAULT_IMAGE_URL}
                 alt="Profile preview"
                 className="h-full w-full object-cover"
               />
+              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-white text-xs text-center p-2">
+                  {isUploading ? "Uploading..." : "Change Photo"}
+                </span>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-xs text-neutral-400">Profile Image</label>
               <input
                 type="file"
+                ref={fileInputRef}
                 accept="image/*"
                 onChange={(event) => handleImageUpload(event.target.files?.[0])}
-                className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-neutral-200 file:mr-3 file:rounded file:border-0 file:bg-neutral-800 file:px-3 file:py-1 file:text-xs file:text-neutral-200"
+                className="hidden"
+                disabled={isUploading}
               />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-left text-sm text-neutral-200 disabled:opacity-50"
+              >
+                {isUploading ? "Uploading..." : "Choose an image"}
+              </button>
               <input
                 type="url"
                 value={imageUrl}
@@ -162,7 +220,7 @@ export default function CreateProfileModal({
             <div className="space-y-2">
               <label className="text-xs text-neutral-400">Handle</label>
               <input
-                value={resolvedHandle}
+                value={handle}
                 onChange={(event) => setHandle(event.target.value)}
                 placeholder="for get api"
                 className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-neutral-200"
@@ -250,7 +308,7 @@ export default function CreateProfileModal({
             <button
               type="submit"
               disabled={isSaving}
-              className="rounded-sm bg-orange-500 px-5 py-2 text-xs font-semibold uppercase text-black transition hover:bg-orange-400 disabled:opacity-60"
+              className="rounded-sm bg-green-500 px-5 py-2 text-xs font-semibold uppercase text-black transition hover:bg-green-400 disabled:opacity-60"
             >
               {isSaving ? "Saving..." : "Save Profile"}
             </button>

@@ -1,14 +1,32 @@
+import { useState } from "react";
 import type { ProfileWallet } from "../lib/profile-api";
 import { formatDateTime, truncateMiddle } from "../lib/profile-format";
+
+const API_KEY = "file"; // Using 'file' as the API key
+const getAvatarUploadUrl = (userId: number | string | null) => {
+  if (userId === null || userId === "") {
+    throw new Error("User ID is required for avatar upload");
+  }
+  return `https://testnet-api.degenter.io/profiles/${userId}/avatar`;
+};
+
+interface UploadResponse {
+  success: boolean;
+  url?: string;
+  error?: string;
+}
 
 type ProfileWalletsProps = {
   wallets: ProfileWallet[];
   onLinkWallet?: () => void;
+  userId?: number | string | null;
+  onImageUploadSuccess?: (imageUrl: string) => void;
 };
 
 export default function ProfileWallets({
   wallets,
   onLinkWallet,
+  userId,
 }: ProfileWalletsProps) {
   const rows = wallets?.length
     ? wallets
@@ -20,6 +38,82 @@ export default function ProfileWallets({
           updated_at: "2026-01-16T15:06:50Z",
         },
       ];
+
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleImageUpload = async (file: File) => {
+    if (!userId) {
+      setUploadError("User ID is required");
+      return null;
+    }
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const uploadUrl = getAvatarUploadUrl(userId);
+      console.log("Uploading to:", uploadUrl);
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "x-api-key": API_KEY,
+          // Don't set Content-Type header, let the browser set it with the correct boundary
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log("Upload response:", result);
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+            result.error ||
+            `Failed to upload image: ${response.status} ${response.statusText}`
+        );
+      }
+
+      // Handle different response formats
+      const imageUrl =
+        result.url ||
+        result.image_url ||
+        (result.data && (result.data.url || result.data.image_url));
+
+      if (!imageUrl) {
+        throw new Error("No image URL in response");
+      }
+
+      console.log("Image uploaded successfully:", imageUrl);
+
+      // Here you might want to update the parent component with the new image URL
+      // For example: onImageUploadSuccess?.(imageUrl);
+
+      return imageUrl;
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      setUploadError(
+        error instanceof Error ? error.message : "Failed to upload image"
+      );
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    await handleImageUpload(file);
+  };
 
   return (
     <section className="border-b border-neutral-800 pb-6">
@@ -52,10 +146,45 @@ export default function ProfileWallets({
               <div className="text-xs text-neutral-500 md:text-sm">
                 {index + 1}
               </div>
-              <div className="text-blue-400">
-                {truncateMiddle(wallet.address, 6, 4)}
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <img
+                    src={`https://avatar.vercel.sh/${wallet.address}.svg`}
+                    alt=""
+                    className="h-8 w-8 rounded-full border border-neutral-700"
+                  />
+                  <label className="absolute -bottom-1 -right-1 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-neutral-800 p-1 hover:bg-neutral-700">
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      disabled={isUploading}
+                    />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                  </label>
+                </div>
+                <span className="text-blue-400">
+                  {truncateMiddle(wallet.address, 6, 4)}
+                </span>
               </div>
-              <div className="text-neutral-200">{wallet.network ?? "Solana"}</div>
+              <div className="text-neutral-200">
+                {wallet.network ?? "Solana"}
+              </div>
               <div className="text-neutral-200">
                 {formatDateTime(wallet.updated_at)}
               </div>
@@ -75,11 +204,20 @@ export default function ProfileWallets({
         <button
           type="button"
           onClick={onLinkWallet}
-          className="rounded-sm bg-orange-500 px-4 py-2 text-xs font-semibold uppercase text-black transition hover:bg-orange-400"
+          className="rounded-sm bg-green-500 px-4 py-2 text-xs font-semibold uppercase text-black transition hover:bg-green-400"
         >
           Link Wallet
         </button>
       </div>
+      {uploadError && (
+        <div className="mt-2 text-sm text-red-500">{uploadError}</div>
+      )}
+      {isUploading && (
+        <div className="mt-2 flex items-center gap-2 text-sm text-neutral-400">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-500 border-t-orange-500"></div>
+          Uploading image...
+        </div>
+      )}
     </section>
   );
 }

@@ -36,79 +36,20 @@ const nextConfig = {
     return config;
   },
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'raw.githubusercontent.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'memesfun.mypinata.cloud',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'fonts.googleapis.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'sapphire-tremendous-deer-367.mypinata.cloud',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'fuchsia-kind-parrotfish-734.mypinata.cloud',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'beige-recent-snipe-514.mypinata.cloud',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'oro-images.s3.us-east-1.amazonaws.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'blue-careful-carp-364.mypinata.cloud',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'image.gatedataimg.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'pbs.twimg.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 's2.coinmarketcap.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 't3.ftcdn.net',
-        port: '',
-        pathname: '/**',
-      },
+    domains: [
+      'raw.githubusercontent.com',
+      'memesfun.mypinata.cloud',
+      'fonts.googleapis.com',
+      'sapphire-tremendous-deer-367.mypinata.cloud',
+      'fuchsia-kind-parrotfish-734.mypinata.cloud',
+      'beige-recent-snipe-514.mypinata.cloud',
+      'oro-images.s3.us-east-1.amazonaws.com',
+      'blue-careful-carp-364.mypinata.cloud',
+      'image.gatedataimg.com',
+      'pbs.twimg.com',
+      's2.coinmarketcap.com',
+      't3.ftcdn.net',
+      'testnetmedia.degenter.io'
     ],
   },
 };

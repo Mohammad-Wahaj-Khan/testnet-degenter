@@ -20,7 +20,15 @@ interface Token {
 
 const FALLBACK_TOKEN_IMAGE = "/zigicon.png";
 const COINMARKETCAP_HOST = "s2.coinmarketcap.com";
-const BUBBLEMAP_API_BASE = "https://dex-api.cryptocomics.cc";
+const BUBBLEMAP_API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "https://testnet-api.degenter.io";
+const API_KEY = process.env.NEXT_PUBLIC_X_API_KEY || "";
+
+if (!API_KEY) {
+  console.warn(
+    "API key is not set. Please set NEXT_PUBLIC_API_KEY environment variable."
+  );
+}
 
 const getSafeTokenImage = (imageUri?: string) => {
   if (!imageUri) return FALLBACK_TOKEN_IMAGE;
@@ -68,13 +76,17 @@ export default function TopMarketToken() {
         setLoading(true);
         let poolImageMap = new Map<string, string>();
         try {
-          const poolsRes = await fetch(
-            `${BUBBLEMAP_API_BASE}/api/v1/pools?limit=300`,
-            { headers: { Accept: "application/json" } }
-          );
+          const poolsRes = await fetch(`${BUBBLEMAP_API_BASE}/tokens`, {
+            headers: {
+              Accept: "application/json",
+              "x-api-key": API_KEY,
+            },
+          });
           if (poolsRes.ok) {
             const poolsJson = await poolsRes.json();
-            poolImageMap = buildPoolImageMap(poolsJson?.pools ?? []);
+            if (poolsJson.success && Array.isArray(poolsJson.data)) {
+              poolImageMap = buildPoolImageMap(poolsJson.data);
+            }
           }
         } catch {
           poolImageMap = new Map<string, string>();
@@ -127,17 +139,17 @@ export default function TopMarketToken() {
             poolImageMap.get(symbolKey) || poolImageMap.get(denomKey);
           const resolvedImage = getSafeTokenImage(poolImage || token.imageUri);
           return {
-          id: token.tokenId?.toString() || "",
-          symbol: token.symbol || "",
-          name: token.name || "",
-          current_price: token.priceUsd || token.priceNative || 0,
-          price_change_percentage_24h: token.change24hPct || 0,
-          market_cap: token.mcapUsd || token.mcapNative || 0,
-          total_volume: token.volUsd || token.volNative || 0,
-          image: resolvedImage,
-          tx: token.tx || 0,
-          denom: token.denom || "",
-          holders: token.holders?.toString() || "0",
+            id: token.tokenId?.toString() || "",
+            symbol: token.symbol || "",
+            name: token.name || "",
+            current_price: token.priceUsd || token.priceNative || 0,
+            price_change_percentage_24h: token.change24hPct || 0,
+            market_cap: token.mcapUsd || token.mcapNative || 0,
+            total_volume: token.volUsd || token.volNative || 0,
+            image: resolvedImage,
+            tx: token.tx || 0,
+            denom: token.denom || "",
+            holders: token.holders?.toString() || "0",
           };
         });
 

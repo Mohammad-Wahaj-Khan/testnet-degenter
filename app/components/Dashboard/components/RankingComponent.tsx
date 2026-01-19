@@ -3,6 +3,19 @@
 import Image from "next/image";
 import React, { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+function isWebGLAvailable(): boolean {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext("webgl") || canvas.getContext("experimental-webgl"))
+    );
+  } catch {
+    return false;
+  }
+}
 
 const STAKED_ZIG_DENOM =
   "coin.zig109f7g2rzl2aqee7z6gffn8kfe9cpqx0mjkk7ethmx8m2hq4xpe9snmaam2.stzig";
@@ -59,10 +72,7 @@ const RankingComponent: React.FC<{
       ),
     [safeRankedTokens]
   );
-  const availableCount = Math.min(
-    MAX_RANKING_ROWS,
-    sortedRankedTokens.length
-  );
+  const availableCount = Math.min(MAX_RANKING_ROWS, sortedRankedTokens.length);
   const desiredCount = Math.max(MIN_RANKING_ROWS, availableCount);
   const visibleTokens = sortedRankedTokens.slice(0, availableCount);
   const filledRankTokens = [...visibleTokens];
@@ -83,7 +93,10 @@ const RankingComponent: React.FC<{
   };
 
   while (filledRankTokens.length < desiredCount) {
-    filledRankTokens.push({ ...defaultToken, rank: filledRankTokens.length + 1 });
+    filledRankTokens.push({
+      ...defaultToken,
+      rank: filledRankTokens.length + 1,
+    });
   }
 
   const rankings: RankingItem[] = filledRankTokens.map((token, index) => ({
@@ -104,8 +117,8 @@ const RankingComponent: React.FC<{
         : index === 1
         ? "from-[#0B1008] via-[#0B3F27] to-[#16CF78]"
         : index === 2
-        // ? "from-[#120216] via-[#6B1D65] to-[#E830C9]"
-        ? "from-[#0B1008] via-[#0B3F27] to-[#16CF78]"
+        ? // ? "from-[#120216] via-[#6B1D65] to-[#E830C9]"
+          "from-[#0B1008] via-[#0B3F27] to-[#16CF78]"
         : index === 3
         ? "from-[#060A0D] via-[#06381A] to-[#0CBD83]"
         : "from-[#060A0D] via-[#06381A] to-[#0CBD83]",
@@ -130,7 +143,26 @@ const RankingComponent: React.FC<{
     if (!threeRef.current) return;
     const el = threeRef.current;
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    // --- SAFETY GUARD: DO NOT INIT THREE IF WEBGL IS NOT AVAILABLE ---
+    if (!isWebGLAvailable()) {
+      console.warn("WebGL not available, skipping Three.js background");
+      return;
+    }
+
+    let renderer: any;
+
+    try {
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        powerPreference: "high-performance",
+        failIfMajorPerformanceCaveat: true,
+      });
+    } catch (err) {
+      console.warn("Failed to initialize WebGLRenderer:", err);
+      return;
+    }
+
     renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     let width = el.clientWidth || 400;
@@ -295,7 +327,8 @@ const RankingComponent: React.FC<{
     return () => {
       cancelAnimationFrame(rafId);
       window.removeEventListener("resize", onResize);
-      if (listRef.current) listRef.current.removeEventListener("scroll", onScroll);
+      if (listRef.current)
+        listRef.current.removeEventListener("scroll", onScroll);
       boxGeometry.dispose();
       meshes.forEach((mesh) => {
         (mesh.material as { dispose?: () => void }).dispose?.();
@@ -372,13 +405,15 @@ const RankingComponent: React.FC<{
       translateZ: number;
       opacity: number;
       zIdx: number;
-    }> = Array.from({ length: Math.max(1, itemRefs.current.length) }).map(() => ({
-      rotateX: 0,
-      scale: 1,
-      translateZ: 0,
-      opacity: 1,
-      zIdx: 1000,
-    }));
+    }> = Array.from({ length: Math.max(1, itemRefs.current.length) }).map(
+      () => ({
+        rotateX: 0,
+        scale: 1,
+        translateZ: 0,
+        opacity: 1,
+        zIdx: 1000,
+      })
+    );
 
     const smoothing = 0.08; // Lerp factor - buttery smooth, slower updates
 
@@ -389,10 +424,10 @@ const RankingComponent: React.FC<{
       const center = scrollTop + containerHeight / 2 - centerOffset;
 
       // Animation configuration
-        const maxRotateX = 55; // Max tilt backwards in degrees
-        const minScale = 0.78; // Minimum scale when fully tilted back
-        const maxTranslateZ = -70; // How far back items go into the screen (closer)
-        const minOpacity = 0.1; // Minimum opacity
+      const maxRotateX = 55; // Max tilt backwards in degrees
+      const minScale = 0.78; // Minimum scale when fully tilted back
+      const maxTranslateZ = -70; // How far back items go into the screen (closer)
+      const minOpacity = 0.1; // Minimum opacity
 
       for (let i = 0; i < itemRefs.current.length; i++) {
         const el = itemRefs.current[i];
@@ -403,7 +438,8 @@ const RankingComponent: React.FC<{
         const itemCenter = itemTop + itemHeight / 2;
 
         // Distance from center (-1 to 1 range, can exceed)
-        const distanceFromCenter = (itemCenter - center) / (containerHeight / 2);
+        const distanceFromCenter =
+          (itemCenter - center) / (containerHeight / 2);
         const absDistance = Math.abs(distanceFromCenter);
 
         // Clamp for smooth falloff
@@ -416,7 +452,7 @@ const RankingComponent: React.FC<{
         const targetRotateX = tiltDirection * tiltAmount * maxRotateX;
 
         // === SCALE - SHRINK AS THEY TILT BACK ===
-        const scaleAmount = 1 - (clampedDistance * (1 - minScale));
+        const scaleAmount = 1 - clampedDistance * (1 - minScale);
         const targetScale = Math.max(minScale, scaleAmount);
 
         // === TRANSLATE Z - PUSH BACK INTO SCREEN ===
@@ -424,11 +460,11 @@ const RankingComponent: React.FC<{
         const targetTranslateZ = depthAmount * maxTranslateZ;
 
         // === OPACITY - FADE AS THEY GO BACK ===
-        const opacityAmount = 1 - (clampedDistance * (1 - minOpacity));
+        const opacityAmount = 1 - clampedDistance * (1 - minOpacity);
         const targetOpacity = Math.max(minOpacity, opacityAmount);
 
         // === Z-INDEX - CLOSER ITEMS ON TOP ===
-        const targetZIdx = Math.round(1000 - (absDistance * 500));
+        const targetZIdx = Math.round(1000 - absDistance * 500);
 
         // Get or initialize state
         const s = state[i] || {
@@ -513,7 +549,8 @@ const RankingComponent: React.FC<{
     const alignStart = () => {
       const target = itemRefs.current[desiredIndex];
       if (!target) return;
-      const offset = target.offsetTop - container.clientHeight / 2 + target.offsetHeight / 2;
+      const offset =
+        target.offsetTop - container.clientHeight / 2 + target.offsetHeight / 2;
       container.scrollTop = Math.max(0, offset);
     };
 
@@ -538,7 +575,10 @@ const RankingComponent: React.FC<{
         </div>
       </div>
 
-      <div ref={threeRef} className="absolute inset-0 z-0 pt-[-100px] pointer-events-none" />
+      <div
+        ref={threeRef}
+        className="absolute inset-0 z-0 pt-[-100px] pointer-events-none"
+      />
       <div
         ref={listRef}
         className="h-[480px] md:h-[500px] overflow-y-scroll no-scrollbar space-y-5 relative z-10 overscroll-contain"
@@ -570,7 +610,9 @@ const RankingComponent: React.FC<{
                 {/* Glass border effect */}
                 <div
                   className={`absolute inset-0 bg-gradient-to-r from-white/5 to-white/10 backdrop-blur-sm rounded-2xl border border-white/10 z-10 ${
-                    index === 0 ? "shadow-[0_0_56px_2px_rgba(239,68,68,0.5)]" : ""
+                    index === 0
+                      ? "shadow-[0_0_56px_2px_rgba(239,68,68,0.5)]"
+                      : ""
                   }`}
                   style={index === 0 ? { transform: "translateZ(0)" } : {}}
                 />
