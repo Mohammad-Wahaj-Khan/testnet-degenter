@@ -41,15 +41,15 @@ export default function CreateProfileModal({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Only use the handle if it doesn't look like a wallet address
-  // const resolvedHandle = useMemo(() => {
-  //   const trimmedHandle = handle.trim();
-  //   // Check if the handle looks like a wallet address (0x followed by 40 hex characters)
-  //   if (/^0x[a-fA-F0-9]{40}$/.test(trimmedHandle)) {
-  //     return "";
-  //   }
-  //   return trimmedHandle;
-  // }, [handle]);
+  // Prevent wallet addresses as handles
+  useEffect(() => {
+    const trimmedHandle = handle.trim();
+    if (/^0x[a-fA-F0-9]{40}$/i.test(trimmedHandle)) {
+      setError("Wallet addresses cannot be used as handles");
+    } else if (error === "Wallet addresses cannot be used as handles") {
+      setError("");
+    }
+  }, [handle, error]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -106,8 +106,15 @@ export default function CreateProfileModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!handle.trim()) {
+    const trimmedHandle = handle.trim();
+    if (!trimmedHandle) {
       setError("Handle is required");
+      return;
+    }
+
+    // Add any additional handle validation here if needed
+    if (trimmedHandle.length < 3) {
+      setError("Handle must be at least 3 characters long");
       return;
     }
 
@@ -128,7 +135,7 @@ export default function CreateProfileModal({
         wallets: initialProfile?.wallets || [],
       };
 
-      console.log("Submitting profile data:", profileData);
+      // console.log("Submitting profile data:", profileData);
 
       // Call the save function from props
       await onSave(profileData);

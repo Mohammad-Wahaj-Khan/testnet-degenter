@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ProfileWallet } from "../lib/profile-api";
 import { formatDateTime, truncateMiddle } from "../lib/profile-format";
 
@@ -24,18 +24,41 @@ type ProfileWalletsProps = {
 };
 
 export default function ProfileWallets({
-  wallets,
+  wallets = [],
   onLinkWallet,
   userId,
+  onImageUploadSuccess,
 }: ProfileWalletsProps) {
-  const rows = wallets?.length
-    ? wallets
+  const [localWallets, setLocalWallets] = useState<ProfileWallet[]>(wallets);
+  const prevWalletsRef = useRef<ProfileWallet[]>(wallets);
+  const prevUserIdRef = useRef<number | string | null | undefined>(userId);
+  // Update local state when props change
+  useEffect(() => {
+    // Only update if wallets prop actually changed
+    const walletsChanged = JSON.stringify(wallets) !== JSON.stringify(prevWalletsRef.current);
+    const userIdChanged = userId !== prevUserIdRef.current;
+
+    if (walletsChanged || userIdChanged) {
+      setLocalWallets(wallets);
+      prevWalletsRef.current = wallets;
+      prevUserIdRef.current = userId;
+      
+      // Reset upload state when user changes
+      if (userIdChanged) {
+        setIsUploading(false);
+        setUploadError(null);
+      }
+    }
+  }, [wallets, userId]);
+
+  const rows = localWallets?.length
+    ? localWallets
     : [
         {
-          address: "3hXNpgKLFQ",
-          label: "main",
-          network: "Zigchain",
-          updated_at: "2026-01-16T15:06:50Z",
+          address: "No wallets connected",
+          label: "",
+          network: "",
+          updated_at: new Date().toISOString(),
         },
       ];
 
@@ -44,7 +67,7 @@ export default function ProfileWallets({
 
   const handleImageUpload = async (file: File) => {
     if (!userId) {
-      setUploadError("User ID is required");
+      setUploadError("Please connect your wallet first");
       return null;
     }
     if (!file) return;
@@ -57,7 +80,7 @@ export default function ProfileWallets({
 
     try {
       const uploadUrl = getAvatarUploadUrl(userId);
-      console.log("Uploading to:", uploadUrl);
+      // console.log("Uploading to:", uploadUrl);
 
       const response = await fetch(uploadUrl, {
         method: "POST",
@@ -69,7 +92,7 @@ export default function ProfileWallets({
       });
 
       const result = await response.json();
-      console.log("Upload response:", result);
+      // console.log("Upload response:", result);
 
       if (!response.ok) {
         throw new Error(
@@ -89,10 +112,12 @@ export default function ProfileWallets({
         throw new Error("No image URL in response");
       }
 
-      console.log("Image uploaded successfully:", imageUrl);
+      // console.log("Image uploaded successfully:", imageUrl);
 
-      // Here you might want to update the parent component with the new image URL
-      // For example: onImageUploadSuccess?.(imageUrl);
+      // Update the parent component with the new image URL
+      if (onImageUploadSuccess) {
+        onImageUploadSuccess(imageUrl);
+      }
 
       return imageUrl;
     } catch (error) {
@@ -106,13 +131,22 @@ export default function ProfileWallets({
     }
   };
 
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    await handleImageUpload(file);
+    // Reset the input value to allow re-uploading the same file
+    event.target.value = '';
+    
+    try {
+      const imageUrl = await handleImageUpload(file);
+      if (imageUrl && onImageUploadSuccess) {
+        onImageUploadSuccess(imageUrl);
+      }
+    } catch (error) {
+      console.error('Error handling file upload:', error);
+      setUploadError('Failed to process image upload');
+    }
   };
 
   return (

@@ -58,7 +58,10 @@ async function getTokenData() {
   );
 
   return normalized
-    .sort((a: { volUsd: any }, b: { volUsd: any }) => (b.volUsd ?? 0) - (a.volUsd ?? 0))
+    .sort(
+      (a: { volUsd: any }, b: { volUsd: any }) =>
+        (b.volUsd ?? 0) - (a.volUsd ?? 0)
+    )
     .slice(0, 200);
 }
 

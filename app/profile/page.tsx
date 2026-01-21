@@ -22,7 +22,7 @@ import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../config/chain";
 
 const GUEST_WALLET_KEY = "degenterGuestWalletId";
-const GUEST_HANDLE_KEY = "degenterGuestProfileHandle";
+const USER_ID_KEY = "degenterUserId";
 
 const defaultProfile: Profile = {
   handle: "",
@@ -65,7 +65,7 @@ export default function ProfilePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hasProfile, setHasProfile] = useState(true);
   const [guestWalletId, setGuestWalletId] = useState("");
-  const [guestHandle, setGuestHandle] = useState("");
+  const [savedUserId, setSavedUserId] = useState("");
   const [lastWalletAddress, setLastWalletAddress] = useState(address);
 
   const handleImageUpdate = async (imageUrl: string) => {
@@ -185,21 +185,27 @@ export default function ProfilePage() {
 
   // Initial load and guest wallet handling
   useEffect(() => {
+    const storedWalletId = localStorage.getItem(GUEST_WALLET_KEY);
+    if (storedWalletId) {
+      setGuestWalletId(storedWalletId);
+    }
+
+    const storedUserId = localStorage.getItem(USER_ID_KEY);
+    if (storedUserId) {
+      setSavedUserId(storedUserId);
+    }
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const storedWallet = localStorage.getItem(GUEST_WALLET_KEY);
-    const storedHandle = localStorage.getItem(GUEST_HANDLE_KEY);
-    if (storedWallet) {
-      setGuestWalletId(storedWallet);
-    } else {
+    if (!storedWallet) {
       const generated =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? `guest-${crypto.randomUUID()}`
           : `guest-${Math.random().toString(36).slice(2, 10)}`;
       localStorage.setItem(GUEST_WALLET_KEY, generated);
       setGuestWalletId(generated);
-    }
-    if (storedHandle) {
-      setGuestHandle(storedHandle);
     }
   }, []);
 
@@ -211,12 +217,11 @@ export default function ProfilePage() {
       setError("");
 
       try {
-        if (!userId && !handle && !address && !guestHandle && !guestWalletId) {
+        if (!userId && !handle && !address && !guestWalletId) {
           setIsLoading(false);
           return;
         }
-        const effectiveHandle =
-          handle || address || guestHandle || guestWalletId;
+        const effectiveHandle = handle || address || guestWalletId;
         const data = userId
           ? await getProfileById(userId, apiKey)
           : await getProfile(effectiveHandle, apiKey);
@@ -242,7 +247,7 @@ export default function ProfilePage() {
     return () => {
       isActive = false;
     };
-  }, [handle, userId, address, apiKey, guestHandle, guestWalletId]);
+  }, [handle, userId, address, apiKey, guestWalletId]);
 
   const handleUpgrade = () => {
     setIsModalOpen(true);
@@ -262,7 +267,7 @@ export default function ProfilePage() {
 
       // Create initial profile data without the image if it's a base64 string
       const initialProfileData = {
-        handle: payload.handle,
+        handle: profile.handle,
         display_name: payload.display_name || payload.handle,
         bio: payload.bio || "",
         image_url: imageUrl.startsWith("data:") ? "" : imageUrl, // Don't send base64 directly
@@ -285,10 +290,13 @@ export default function ProfilePage() {
       // First create/update the profile
       let saved;
       if (hasProfile && profile.user_id) {
-        saved = await updateProfile(
-          { ...initialProfileData, user_id: profile.user_id },
-          apiKey
-        );
+        // Include the handle in the update payload
+        const updateData = {
+          ...initialProfileData,
+          user_id: profile.user_id,
+          handle: payload.handle, // Use the new handle from the payload
+        };
+        saved = await updateProfile(updateData, apiKey);
       } else {
         saved = await createProfile(initialProfileData as Profile, apiKey);
       }
@@ -329,10 +337,10 @@ export default function ProfilePage() {
       setHasProfile(true);
       setIsModalOpen(false);
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem(GUEST_HANDLE_KEY, saved.handle);
+      if (saved.user_id) {
+        localStorage.setItem(USER_ID_KEY, saved.user_id.toString());
+        setSavedUserId(saved.user_id.toString());
       }
-      setGuestHandle(saved.handle);
       // Don't return the profile data as the function should return void
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -382,7 +390,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => openView()}
-                  className="rounded-sm bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                  className="rounded-sm bg-green-500 px-4 py-2 text-sm font-semibold text-white hover:bg-green-600"
                 >
                   Connect Wallet
                 </button>
@@ -390,7 +398,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(true)}
-                  className="rounded-sm bg-green-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                  className="rounded-sm bg-green-500 px-4 py-2 text-sm font-semibold text-white hover:bg-green-600"
                 >
                   Create Profile
                 </button>
@@ -424,7 +432,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => openView()}
-                className="rounded-sm bg-orange-500 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                className="rounded-sm bg-green-500 px-6 py-2 text-sm font-semibold text-white hover:bg-green-600"
               >
                 Connect Wallet
               </button>
@@ -447,7 +455,7 @@ export default function ProfilePage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleCreateProfile}
-        walletAddress={address ?? guestHandle ?? guestWalletId ?? undefined}
+        walletAddress={address ?? guestWalletId ?? undefined}
         initialProfile={profile}
         apiKey={apiKey}
       />

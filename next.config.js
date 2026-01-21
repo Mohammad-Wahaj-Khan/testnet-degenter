@@ -48,6 +48,7 @@ const nextConfig = {
       'image.gatedataimg.com',
       'pbs.twimg.com',
       's2.coinmarketcap.com',
+      'encrypted-tbn0.gstatic.com',
       't3.ftcdn.net',
       'testnetmedia.degenter.io'
     ],

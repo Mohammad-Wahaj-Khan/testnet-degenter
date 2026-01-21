@@ -163,7 +163,7 @@ export async function getProfileByWallet(
   const json = await response.json();
   const payload = json?.data ?? json;
 
-  return normalizeProfile(payload, walletAddress);
+  return normalizeProfile(payload, payload.handle);
 }
 
 export async function uploadProfileImage(
@@ -222,19 +222,19 @@ export async function updateProfile(
   }
 
   // Always use user_id if available, otherwise fall back to handle
-  const identifier = profile.user_id ?? profile.handle;
+  const identifier = profile.user_id;
   const url = `${API_BASE}/profiles/${identifier}`;
 
   // Create a clean payload without undefined values and ensure required fields are included
   // Exclude image_url since it's handled separately via the avatar upload endpoint
   const payload: Partial<Profile> = {
+    handle: profile.handle, // Include handle in the payload for updates
     display_name: profile.display_name,
     bio: profile.bio,
     website: profile.website,
     twitter: profile.twitter,
     telegram: profile.telegram,
     tags: profile.tags,
-    // Don't include handle in the payload as it should be part of the URL
     // Don't include wallets in the update as they should be managed separately
   };
 

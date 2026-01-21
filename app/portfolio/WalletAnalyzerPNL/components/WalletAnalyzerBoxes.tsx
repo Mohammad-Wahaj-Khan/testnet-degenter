@@ -4,7 +4,17 @@ import React from "react";
 import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../../../config/chain";
 import { API_BASE_URL } from "@/lib/api";
-import { Bar, BarChart, Line, ComposedChart, ResponsiveContainer, XAxis, YAxis, Tooltip, ReferenceLine } from "recharts";
+import {
+  Bar,
+  BarChart,
+  Line,
+  ComposedChart,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ReferenceLine,
+} from "recharts";
 
 export const analyzerTabs = [
   { id: "trading", label: "Trading PNL" },
@@ -78,7 +88,67 @@ export default function WalletAnalyzer({
   const [pnlTokens, setPnlTokens] = React.useState<PnlTokenItem[]>([]);
   const [pnlLoading, setPnlLoading] = React.useState(false);
   const [pnlError, setPnlError] = React.useState<string | null>(null);
+  // Inside export default function WalletAnalyzer(...) {
 
+  // Inside export default function WalletAnalyzer(...)
+  const [portfolioSeries, setPortfolioSeries] = React.useState<{
+    points: Array<{ t: string; value_usd: number }>;
+    loading: boolean;
+    error: string | null;
+  }>({ points: [], loading: false, error: null });
+
+  // Inside WalletAnalyzer component
+  React.useEffect(() => {
+    // We remove the activeTab check so it fetches whenever a new wallet is searched
+    if (!address) {
+      setPortfolioSeries({ points: [], loading: false, error: null });
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+
+    const loadPortfolioSeries = async () => {
+      setPortfolioSeries((prev) => ({ ...prev, loading: true, error: null }));
+      try {
+        const win = timeframeToWin[timeframe];
+        const response = await fetchFromEndpoints(
+          apiEndpoints,
+          `wallets/${encodeURIComponent(
+            address
+          )}/portfolio/value-series?win=${encodeURIComponent(win)}&tf=1h`,
+          {
+            signal: controller.signal,
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+          },
+          "portfolio series"
+        );
+
+        if (active) {
+          setPortfolioSeries({
+            points: response.points || [],
+            loading: false,
+            error: null,
+          });
+        }
+      } catch (err) {
+        if (!active) return;
+        setPortfolioSeries({
+          points: [],
+          loading: false,
+          error: err instanceof Error ? err.message : "Failed to load",
+        });
+      }
+    };
+
+    loadPortfolioSeries();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [address, timeframe, apiEndpoints]); // address is the primary trigger here
   // PNL Summary state
   const [pnlSummary, setPnlSummary] = React.useState<{
     totalPnl: number;
@@ -89,8 +159,8 @@ export default function WalletAnalyzer({
 
   // PNL Series state
   const [pnlSeries, setPnlSeries] = React.useState<{
-    points: Array<{ 
-      t: string; 
+    points: Array<{
+      t: string;
       realized_pnl_usd: number;
       total_pnl_usd: number;
       pnl: number;
@@ -148,23 +218,27 @@ export default function WalletAnalyzer({
   };
 
   // Calculate PNL summary from series data
-  const updatePnlSummary = (points: Array<{pnl: number}>) => {
-    const summary = points.reduce((acc, point) => {
-      const pnl = point.pnl || 0;
-      if (pnl > 0) acc.winCount++;
-      if (pnl < 0) acc.lossCount++;
-      acc.totalPnl += pnl;
-      return acc;
-    }, { totalPnl: 0, winCount: 0, lossCount: 0 });
-    
+  const updatePnlSummary = (points: Array<{ pnl: number }>) => {
+    const summary = points.reduce(
+      (acc, point) => {
+        const pnl = point.pnl || 0;
+        if (pnl > 0) acc.winCount++;
+        if (pnl < 0) acc.lossCount++;
+        acc.totalPnl += pnl;
+        return acc;
+      },
+      { totalPnl: 0, winCount: 0, lossCount: 0 }
+    );
+
     const totalTrades = summary.winCount + summary.lossCount;
-    const winRate = totalTrades > 0 ? (summary.winCount / totalTrades) * 100 : 0;
-    
+    const winRate =
+      totalTrades > 0 ? (summary.winCount / totalTrades) * 100 : 0;
+
     setPnlSummary({
       totalPnl: summary.totalPnl,
       winCount: summary.winCount,
       lossCount: summary.lossCount,
-      winRate: parseFloat(winRate.toFixed(2))
+      winRate: parseFloat(winRate.toFixed(2)),
     });
   };
 
@@ -195,9 +269,9 @@ export default function WalletAnalyzer({
             headers: { Accept: "application/json" },
           },
           "pnl series"
-        )) as { 
-          points: Array<{ 
-            t: string; 
+        )) as {
+          points: Array<{
+            t: string;
             realized_pnl_usd: number;
             total_pnl_usd: number;
           }>;
@@ -214,15 +288,16 @@ export default function WalletAnalyzer({
           const currentTotal = Number(point.total_pnl_usd) || 0;
           // For the first point, use the total as is
           // For subsequent points, calculate the difference from previous total
-          const dailyChange = index === 0 ? currentTotal : currentTotal - prevTotal;
+          const dailyChange =
+            index === 0 ? currentTotal : currentTotal - prevTotal;
           prevTotal = currentTotal;
-          
+
           return {
             ...point,
-            pnl: dailyChange
+            pnl: dailyChange,
           };
         });
-        
+
         setPnlSeries({
           points: processedPoints,
           loading: false,
@@ -577,31 +652,37 @@ export default function WalletAnalyzer({
     },
   ];
 
+  // Assuming the API response is available as `suspiciousData`
+  const suspiciousData = {
+    sold_more_than_bought_pct: 25,
+    didnt_buy_pct: 0,
+    instant_sell_pct: 25,
+    scam_rug_pct: 50,
+  };
+
   const suspiciousActions = [
     {
       label: "Sold > Bought",
-      value: formatPercentValue(
-        totals.count ? (totals.soldGreater / totals.count) * 100 : 0
-      ),
-      color: "text-white",
+      value: formatPercentValue(suspiciousData.sold_more_than_bought_pct),
+      color:
+        suspiciousData.sold_more_than_bought_pct > 0
+          ? "text-[#ff4d4d]"
+          : "text-white",
     },
     {
       label: "Didn't Buy",
-      value: formatPercentValue(
-        totals.count ? (totals.didntBuy / totals.count) * 100 : 0
-      ),
-      color: "text-white",
+      value: formatPercentValue(suspiciousData.didnt_buy_pct),
+      color: suspiciousData.didnt_buy_pct > 0 ? "text-[#ff4d4d]" : "text-white",
     },
     {
       label: "Instant Sell",
-      value: formatPercentValue(
-        totals.count ? (totals.instantSell / totals.count) * 100 : 0
-      ),
-      color: "text-white",
+      value: formatPercentValue(suspiciousData.instant_sell_pct),
+      color:
+        suspiciousData.instant_sell_pct > 0 ? "text-[#ff4d4d]" : "text-white",
     },
     {
       label: "Scam/Rug tokens",
-      value: "0.00%",
+      value: formatPercentValue(suspiciousData.scam_rug_pct),
       color: "text-[#ff4d4d]",
     },
   ];
@@ -653,12 +734,19 @@ export default function WalletAnalyzer({
               {/* Trading PNL / Win Rate Section */}
               <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] overflow-hidden shadow-2xl h-full flex flex-col">
                 {/* PNL Summary Line */}
-                <div className="px-4 pt-4 pb-2 border-b border-white/5">
+                {/* <div className="px-4 pt-4 pb-2 border-b border-white/5">
                   <div className="flex items-center justify-between text-xs text-gray-400">
                     <div className="flex items-center gap-2">
                       <span>Total PNL:</span>
-                      <span className={`font-medium ${pnlSummary.totalPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {pnlSummary.totalPnl >= 0 ? '+' : ''}{pnlSummary.totalPnl.toFixed(2)}%
+                      <span
+                        className={`font-medium ${
+                          pnlSummary.totalPnl >= 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        {pnlSummary.totalPnl >= 0 ? "+" : ""}
+                        {pnlSummary.totalPnl.toFixed(2)}%
                       </span>
                     </div>
                     <div className="flex items-center gap-4">
@@ -675,7 +763,7 @@ export default function WalletAnalyzer({
                       </div>
                     </div>
                   </div>
-                </div>
+                </div> */}
                 {/* Header Row */}
                 <div className="flex items-center justify-between px-5 pt-4 pb-2">
                   <div className="flex items-center gap-1.5">
@@ -728,100 +816,120 @@ export default function WalletAnalyzer({
                     </div>
                   ) : pnlSeries.points.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={pnlSeries.points}>
+                      <ComposedChart
+                        data={pnlSeries.points}
+                        margin={{ top: 5, right: 5, bottom: 0, left: 0 }}
+                      >
                         <defs>
-                          <linearGradient id="colorWin" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#4ADE80" stopOpacity={0.8} />
-                            <stop offset="100%" stopColor="#4ADE80" stopOpacity={0.1} />
+                          <linearGradient
+                            id="colorWin"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor="#4ADE80"
+                              stopOpacity={0.8}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor="#4ADE80"
+                              stopOpacity={0.2}
+                            />
                           </linearGradient>
-                          <linearGradient id="colorLoss" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#F64F39" stopOpacity={0.8} />
-                            <stop offset="100%" stopColor="#F64F39" stopOpacity={0.1} />
+                          <linearGradient
+                            id="colorLoss"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor="#F64F39"
+                              stopOpacity={0.8}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor="#F64F39"
+                              stopOpacity={0.2}
+                            />
                           </linearGradient>
-                          <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#60A5FA" stopOpacity={0.8} />
-                            <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.8} />
+                          <linearGradient
+                            id="lineGradient"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor="#60A5FA"
+                              stopOpacity={0.6}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor="#3B82F6"
+                              stopOpacity={0.1}
+                            />
                           </linearGradient>
                         </defs>
+
                         <XAxis
                           dataKey="t"
-                          tickLine={false}
-                          axisLine={false}
-                          tick={{ fontSize: 10, fill: "#6B7280" }}
-                          tickFormatter={(value) => {
-                            const date = new Date(value);
-                            return `${date.getDate()}/${date.getMonth() + 1}`;
-                          }}
-                          padding={{ left: 10, right: 10 }}
+                          hide={true} // Cleaner look for a small spark-chart, or keep if preferred
                         />
-                        <YAxis
-                          tickLine={false}
-                          axisLine={false}
-                          tick={{ fontSize: 10, fill: "#6B7280" }}
-                          tickFormatter={(value) => `$${Math.abs(Number(value)).toFixed(2)}`}
-                          width={40}
-                        />
+                        <YAxis hide={true} domain={["auto", "auto"]} />
+
                         <Tooltip
                           contentStyle={{
-                            backgroundColor: "#1F2937",
-                            border: "1px solid #374151",
-                            borderRadius: "0.5rem",
+                            backgroundColor: "#0d0d0d",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: "8px",
                             fontSize: "12px",
                           }}
-                          labelFormatter={(value) => {
-                            const date = new Date(value);
-                            return date.toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric"
-                            });
-                          }}
-                          formatter={(value: number, name: string, props: any) => {
-                            const isPositive = props.payload.pnl >= 0;
-                            const prefix = isPositive ? '+' : '-';
-                            return [
-                              `${prefix}$${Math.abs(Number(value)).toFixed(4)}`,
-                              isPositive ? 'Profit' : 'Loss'
-                            ];
-                          }}
+                          labelFormatter={(value) =>
+                            new Date(value).toLocaleDateString()
+                          }
+                          formatter={(value: number) => [
+                            `$${value.toFixed(4)}`,
+                            value >= 0 ? "Profit" : "Loss",
+                          ]}
                         />
-                        {/* Background line for cumulative PNL */}
+
+                        {/* Cumulative Line: Shows overall trend */}
                         <Line
                           type="monotone"
                           dataKey="total_pnl_usd"
-                          stroke="url(#lineGradient)"
-                          strokeWidth={2}
+                          stroke="#60A5FA"
+                          strokeWidth={1.5}
                           dot={false}
                           strokeDasharray="3 3"
-                          activeDot={false}
                         />
-                        
-                        {/* Main bars */}
-                        <Bar
-                          dataKey="pnl"
-                          radius={[2, 2, 0, 0]}
-                          barSize={4}
-                        >
+
+                        {/* Daily Change Bars: Uses standard Recharts mapping */}
+                        <Bar dataKey="pnl" radius={[2, 2, 0, 0]} barSize={6}>
                           {pnlSeries.points.map((entry, index) => (
-                            <rect
-                              key={`bar-${index}`}
-                              x={index * 6}
-                              y={entry.pnl >= 0 ? 100 - (entry.pnl * 100 / (Math.max(...pnlSeries.points.map(p => Math.abs(p.pnl))) || 1)) : 100}
-                              width={4}
-                              height={Math.abs(entry.pnl) * 100 / (Math.max(...pnlSeries.points.map(p => Math.abs(p.pnl))) || 1)}
-                              fill={entry.pnl >= 0 ? 'url(#colorWin)' : 'url(#colorLoss)'}
-                              rx={2}
-                            />
+                            <React.Fragment key={`cell-${index}`}>
+                              <rect
+                                fill={
+                                  entry.pnl >= 0
+                                    ? "url(#colorWin)"
+                                    : "url(#colorLoss)"
+                                }
+                              />
+                            </React.Fragment>
                           ))}
                         </Bar>
-                        
-                        {/* Zero line */}
-                        <ReferenceLine y={0} stroke="#4B5563" strokeWidth={1} />
+
+                        <ReferenceLine y={0} stroke="#333" strokeWidth={1} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="flex items-center justify-center h-full">
-                      <div className="text-sm text-gray-400">
+                      <div className="text-sm text-zinc-500">
                         No data available
                       </div>
                     </div>
@@ -885,28 +993,41 @@ export default function WalletAnalyzer({
                 </div>
 
                 <div className="relative h-32 w-full px-5 pb-4 pt-6">
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#4ADE80]/5 via-transparent to-[#F64F39]/5 pointer-events-none" />
+                  {/* Decorative background gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#4ADE80]/5 via-transparent to-[#FFEF3C]/5 pointer-events-none" />
 
-                  <div className="flex h-full items-end gap-[3px] relative z-10">
-                    {[
-                      80, 60, 40, 70, 55, 30, 20, 10, 35, 45, 25, 50, 65, 40,
-                      20, 10, 5, 2, 4, 1, 0, 0, 0, 1, 2, 0, 1, 4, 3, 2, 8, 12,
-                      15, 40, 25, 30, 55, 45, 60, 50,
-                    ].map((height, i) => (
-                      <div
-                        key={i}
-                        className={`chart-bar flex-1 rounded-t-[1px] ${
-                          i === 5 || i === 22 || i === 30
-                            ? "bg-[#F64F39]"
-                            : "bg-[#4ADE80]"
-                        }`}
-                        style={{
-                          height: `${height}%`,
-                          opacity: height > 0 ? 0.9 : 0.2,
-                          animationDelay: `${i * 40}ms`,
-                        }}
-                      />
-                    ))}
+                  <div className="flex h-full items-end gap-[2px] relative z-10">
+                    {portfolioSeries.points.length > 0 ? (
+                      portfolioSeries.points.map((point, i) => {
+                        // Find the highest value in the response to scale the bars correctly
+                        const maxVal =
+                          Math.max(
+                            ...portfolioSeries.points.map((p) => p.value_usd)
+                          ) || 1;
+
+                        // Calculate percentage height based on the value_usd field
+                        const heightPercent = (point.value_usd / maxVal) * 100;
+
+                        return (
+                          <div
+                            key={i}
+                            className="chart-bar flex-1 rounded-t-[1px] bg-[#4ADE80]"
+                            style={{
+                              // Ensure even small values (like your 0.005 USD) have a tiny 2% sliver visible
+                              height: `${Math.max(heightPercent, 2)}%`,
+                              opacity: heightPercent > 10 ? 0.9 : 0.4, // Dimmer opacity for very low values
+                              animationDelay: `${i * 20}ms`,
+                            }}
+                          />
+                        );
+                      })
+                    ) : (
+                      <div className="flex w-full items-center justify-center text-zinc-600 text-[10px] uppercase tracking-widest">
+                        {portfolioSeries.loading
+                          ? "Loading Portfolio Data..."
+                          : "No Portfolio Data"}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -995,7 +1116,7 @@ export default function WalletAnalyzer({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:auto-rows-fr">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:auto-rows-fr">
               <div className="relative overflow-hidden border border-white/10 rounded-2xl h-full">
                 <div
                   className="rounded-2xl p-6 overflow-hidden relative shadow-2xl h-full flex flex-col"
