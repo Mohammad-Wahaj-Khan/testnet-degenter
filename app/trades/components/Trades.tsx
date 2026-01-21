@@ -1,7 +1,14 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  useLayoutEffect,
+} from "react";
 import { gsap } from "gsap";
 import Image from "next/image";
 import { Copy, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
@@ -66,7 +73,8 @@ const ensureTradesWs = () => {
     ws.onclose = () => {
       tradesWsHub.ws = null;
       tradesWsHub.connecting = false;
-      if (!tradesWsHub.allowReconnect || tradesWsHub.listeners.size === 0) return;
+      if (!tradesWsHub.allowReconnect || tradesWsHub.listeners.size === 0)
+        return;
       if (tradesWsHub.reconnectAttempts < 5) {
         const delay = Math.min(
           1000 * Math.pow(2, tradesWsHub.reconnectAttempts),
@@ -120,10 +128,7 @@ export interface Trade {
   class: "whale" | "shark" | "shrimp";
 }
 
-export type ValueRangeLabel =
-  | "< 1K ZIG"
-  | "1K - 10K ZIG"
-  | "> 10K ZIG";
+export type ValueRangeLabel = "< 1K ZIG" | "1K - 10K ZIG" | "> 10K ZIG";
 
 export interface TradesFilter {
   assetMode: "all" | "token";
@@ -155,13 +160,19 @@ interface TradesProps {
   onFilteredTradesChange?: (trades: Trade[]) => void;
 }
 
-const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesProps) => {
+const Trades = ({
+  filters,
+  onAvailableTokens,
+  onFilteredTradesChange,
+}: TradesProps) => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const tradesPerPage = 10;
   const [symbolMap, setSymbolMap] = useState<Record<string, string>>({});
-  const [tokenImageMap, setTokenImageMap] = useState<Record<string, string>>({});
+  const [tokenImageMap, setTokenImageMap] = useState<Record<string, string>>(
+    {}
+  );
   const [allTokenOptions, setAllTokenOptions] = useState<TokenOption[]>([]);
   const tableBodyRef = useRef<HTMLTableSectionElement>(null);
   const hasWsTradesRef = useRef(false);
@@ -190,9 +201,7 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
 
     (async () => {
       try {
-        const res = await fetch(
-          `${API_BASE}/tokens/swap-list?q=zig&unit=usd`
-        );
+        const res = await fetch(`${API_BASE}/tokens/swap-list?q=zig&unit=usd`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const items: Array<{
@@ -246,8 +255,11 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        const items: Array<{ denom?: string; tokenId?: string; symbol?: string }> =
-          json?.data ?? [];
+        const items: Array<{
+          denom?: string;
+          tokenId?: string;
+          symbol?: string;
+        }> = json?.data ?? [];
         const options = items
           .map((token) => {
             const denom = token.denom || token.tokenId || "";
@@ -274,7 +286,9 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
   }, [fetchApi]);
 
   const formatTime = (timeStr: string) => {
-    const diff = Math.floor((new Date().getTime() - new Date(timeStr).getTime()) / 1000);
+    const diff = Math.floor(
+      (new Date().getTime() - new Date(timeStr).getTime()) / 1000
+    );
     if (diff < 60) return `${diff}s ago`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}hr ago`;
@@ -283,9 +297,12 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
 
   const getEntityIcon = (tradeClass: Trade["class"]) => {
     switch (tradeClass) {
-      case "whale": return <span className="text-blue-400">🐋</span>;
-      case "shark": return <span className="text-cyan-300">🦈</span>;
-      default: return <span className="text-orange-400">🦐</span>;
+      case "whale":
+        return <span className="text-blue-400">🐋</span>;
+      case "shark":
+        return <span className="text-cyan-300">🦈</span>;
+      default:
+        return <span className="text-orange-400">🦐</span>;
     }
   };
 
@@ -307,7 +324,8 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
     return "shrimp";
   };
 
-  const truncateAddress = (addr: string) => `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+  const truncateAddress = (addr: string) =>
+    `${addr.slice(0, 4)}...${addr.slice(-4)}`;
 
   const formatAmount = (value?: number) =>
     value != null
@@ -336,7 +354,8 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
   const isZigDenom = (denom?: string) => denom?.toLowerCase().includes("uzig");
 
   const tradeKey = (trade: Trade) =>
-    trade.txHash || `${trade.signer}:${trade.time}:${trade.offerDenom}:${trade.askDenom}`;
+    trade.txHash ||
+    `${trade.signer}:${trade.time}:${trade.offerDenom}:${trade.askDenom}`;
 
   const getZigSideAmount = (
     offerDenom: string,
@@ -393,7 +412,8 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
       if (!tradeData) return null;
 
       const direction = (tradeData.direction as Trade["direction"]) || "buy";
-      const offerDenom = tradeData.offer_asset_denom ?? tradeData.offerDenom ?? "";
+      const offerDenom =
+        tradeData.offer_asset_denom ?? tradeData.offerDenom ?? "";
       const askDenom = tradeData.ask_asset_denom ?? tradeData.askDenom ?? "";
       const offerAmountRaw = Number(
         tradeData.offer_amount_base ??
@@ -435,7 +455,9 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
         tradeData.value_in_usd ??
           tradeData.valueUsd ??
           tradeData.value_usd ??
-          (priceUsd ? priceUsd * (direction === "sell" ? offerAmount : returnAmount) : 0)
+          (priceUsd
+            ? priceUsd * (direction === "sell" ? offerAmount : returnAmount)
+            : 0)
       );
 
       return {
@@ -475,9 +497,7 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
 
     if (!items.length) return { trades: [], isSnapshot };
 
-    const mapped = items
-      .map(mapStreamTradeToLocal)
-      .filter(Boolean) as Trade[];
+    const mapped = items.map(mapStreamTradeToLocal).filter(Boolean) as Trade[];
 
     return { trades: mapped, isSnapshot };
   };
@@ -657,8 +677,6 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
     onAvailableTokens(options);
   }, [onAvailableTokens, tokenOptionsFromTrades, allTokenOptions]);
 
-
-
   const filteredTrades = useMemo(() => {
     const now = Date.now();
     const walletFilter = filters.wallet.trim().toLowerCase();
@@ -671,11 +689,9 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
       }
 
       const tradeTimestamp = parseTradeTimestamp(trade.time);
-      const timeLimit = TIME_RANGE_MS[filters.timeRange] ?? Number.POSITIVE_INFINITY;
-      if (
-        !Number.isNaN(tradeTimestamp) &&
-        now - tradeTimestamp > timeLimit
-      ) {
+      const timeLimit =
+        TIME_RANGE_MS[filters.timeRange] ?? Number.POSITIVE_INFINITY;
+      if (!Number.isNaN(tradeTimestamp) && now - tradeTimestamp > timeLimit) {
         return false;
       }
 
@@ -725,7 +741,9 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
 
   useLayoutEffect(() => {
     if (!tableBodyRef.current) return;
-    const rows = Array.from(tableBodyRef.current.querySelectorAll<HTMLTableRowElement>("tr"));
+    const rows = Array.from(
+      tableBodyRef.current.querySelectorAll<HTMLTableRowElement>("tr")
+    );
     if (!rows.length) return;
 
     gsap.fromTo(
@@ -746,125 +764,136 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
   }, [paginatedTrades]);
 
   return (
-    // <div className="relative w-full min-h-screen p-4 font-sans selection:bg-purple-500/30" 
+    // <div className="relative w-full min-h-screen p-4 font-sans selection:bg-purple-500/30"
     //      style={{ backgroundColor: COLORS.darkBg, color: 'white' }}
     //      >
-      
+
     //   {/* Background Gradient Glow - Exact Replica of image_cc8971.jpg */}
     //   {/* <div className="fixed inset-0 pointer-events-none overflow-hidden">
-    //     <div 
+    //     <div
     //       className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] blur-[120px] opacity-20 rounded-full"
     //       style={{ background: `linear-gradient(135deg, ${COLORS.green}, ${COLORS.purple})` }}
     //     />
     //   </div> */}
 
-      <div
-        className="relative z-10 mx-auto w-full rounded-2xl overflow-hidden border border-white/20"
-        style={{
-          backgroundImage: `radial-gradient(circle at 80% 80%, rgba(35, 153, 125, 0.45), rgba(0,0,0,0) 55%), linear-gradient(140deg, #050505 35%, #050505 70%, #020a0b 100%)`,
-          backgroundSize: "cover",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
-        <div className="overflow-x-auto ">
-          <table className="w-full text-left border-collapse">
-            <thead>
-                
-              <tr className="relative border-b border-white/20 bg-[#000000]/50 text-gray-400 text-xs uppercase tracking-wider after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1px] after:bg-gradient-to-r after:from-[#FA4E30] after:to-[#39C8A6] after:content-['']">
-              
-                <th className="px-6 py-4 font-medium">Time</th>
-                <th className="px-6 py-4 font-medium">Type</th>
-                <th className="px-6 py-4 font-medium">Value</th>
-                <th className="px-6 py-4 font-medium">Amount</th>
-                <th className="px-6 py-4 font-medium">Trader</th>
-                <th className="px-6 py-4 font-medium">Source</th>
-                <th className="px-6 py-4 font-medium">Platform</th>
+    <div
+      className="relative z-10 mx-auto w-full rounded-2xl overflow-hidden border border-white/20"
+      style={{
+        backgroundImage: `radial-gradient(circle at 80% 80%, rgba(35, 153, 125, 0.45), rgba(0,0,0,0) 55%), linear-gradient(140deg, #050505 35%, #050505 70%, #020a0b 100%)`,
+        backgroundSize: "cover",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      <div className="overflow-x-auto ">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="relative border-b border-white/20 bg-[#000000]/50 text-gray-400 text-xs uppercase tracking-wider after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1px] after:bg-gradient-to-r after:from-[#FA4E30] after:to-[#39C8A6] after:content-['']">
+              <th className="px-6 py-4 font-medium">Time</th>
+              <th className="px-6 py-4 font-medium">Type</th>
+              <th className="px-6 py-4 font-medium">Value</th>
+              <th className="px-6 py-4 font-medium">Amount</th>
+              <th className="px-6 py-4 font-medium">Trader</th>
+              <th className="px-6 py-4 font-medium">Source</th>
+              <th className="px-6 py-4 font-medium">Platform</th>
+            </tr>
+          </thead>
+          <tbody ref={tableBodyRef} className="divide-y divide-white/[0.03]">
+            {!paginatedTrades.length ? (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-6 py-10 text-center text-sm text-white/60"
+                >
+                  No trades found
+                </td>
               </tr>
-            </thead>
-            <tbody ref={tableBodyRef} className="divide-y divide-white/[0.03]">
-              {!paginatedTrades.length ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-6 py-10 text-center text-sm text-white/60"
-                  >
-                    No trades found
-                  </td>
-                </tr>
-              ) : (
-                paginatedTrades.map((trade, idx) => {
+            ) : (
+              paginatedTrades.map((trade, idx) => {
                 const entityClass = determineEntityClass(trade);
                 return (
-                  <tr key={trade.txHash + idx} className="group transition-colors hover:bg-white/[0.02] border-b border-white/15">
-                  <td className="px-6 py-4 text-sm text-gray-300  border-b border-white/15">
-                    {formatTime(trade.time)}
-                  </td>
-                  <td className="px-6 py-4 border-b border-white/15">
-                    <span className={`px-3 py-1 rounded-md text-[11px] font-bold ${
-                      trade.direction === 'buy' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
-                    }`}>
-                      {trade.direction.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium border-b border-white/15">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1">
-                        {getEntityIcon(entityClass)}
-                        {/* <span className="text-xs uppercase tracking-wide text-gray-400/80 font-semibold">
+                  <tr
+                    key={trade.txHash + idx}
+                    className="group transition-colors hover:bg-white/[0.02] border-b border-white/15"
+                  >
+                    <td className="px-6 py-4 text-sm text-gray-300  border-b border-white/15">
+                      {formatTime(trade.time)}
+                    </td>
+                    <td className="px-6 py-4 border-b border-white/15">
+                      <span
+                        className={`px-3 py-1 rounded-md text-[11px] font-bold ${
+                          trade.direction === "buy"
+                            ? "bg-green-500/10 text-green-400"
+                            : "bg-red-500/10 text-red-400"
+                        }`}
+                      >
+                        {trade.direction.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium border-b border-white/15">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1">
+                          {getEntityIcon(entityClass)}
+                          {/* <span className="text-xs uppercase tracking-wide text-gray-400/80 font-semibold">
                           {getEntityLabel(entityClass)}
                         </span> */}
-                      </div>
-                      <span>
-                        ${trade.valueUsd?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm border-b border-white/15">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2 text-[#20D87C]">
-                        <Image
-                          src={getTokenIcon(trade.askDenom)}
-                          alt={`${symbolFor(trade.askDenom)} icon`}
-                          width={18}
-                          height={18}
-                          className="w-4 h-4 rounded-full object-cover"
-                          unoptimized
-                        />
-                        <span className="text-sm font-semibold">
-                          +{formatAmount(trade.returnAmount)} {symbolFor(trade.askDenom)}
+                        </div>
+                        <span>
+                          $
+                          {trade.valueUsd?.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-[#F64F39]">
-                        <Image
-                          src={getTokenIcon(trade.offerDenom)}
-                          alt={`${symbolFor(trade.offerDenom)} icon`}
-                          width={18}
-                          height={18}
-                          className="w-4 h-4 rounded-full object-cover"
-                          unoptimized
-                        />
-                        <span className="text-sm font-semibold">
-                          -{formatAmount(trade.offerAmount)} {symbolFor(trade.offerDenom)}
-                        </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm border-b border-white/15">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-[#20D87C]">
+                          <Image
+                            src={getTokenIcon(trade.askDenom)}
+                            alt={`${symbolFor(trade.askDenom)} icon`}
+                            width={18}
+                            height={18}
+                            className="w-4 h-4 rounded-full object-cover"
+                            unoptimized
+                          />
+                          <span className="text-sm font-semibold">
+                            +{formatAmount(trade.returnAmount)}{" "}
+                            {symbolFor(trade.askDenom)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[#F64F39]">
+                          <Image
+                            src={getTokenIcon(trade.offerDenom)}
+                            alt={`${symbolFor(trade.offerDenom)} icon`}
+                            width={18}
+                            height={18}
+                            className="w-4 h-4 rounded-full object-cover"
+                            unoptimized
+                          />
+                          <span className="text-sm font-semibold">
+                            -{formatAmount(trade.offerAmount)}{" "}
+                            {symbolFor(trade.offerDenom)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm border-b border-white/15">
-                    <div className="flex items-center gap-2 text-blue-400 group">
-                      <span className="cursor-pointer hover:text-blue-300">
-                        {truncateAddress(trade.signer)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => copyAddress(trade.signer)}
-                        className="opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-label="Copy trader address"
-                      >
-                        <Copy size={12} />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 border-b border-white/15">
+                    </td>
+                    <td className="px-6 py-4 text-sm border-b border-white/15">
+                      <div className="flex items-center gap-2 text-blue-400 group">
+                        <span className="cursor-pointer hover:text-blue-300">
+                          {truncateAddress(trade.signer)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyAddress(trade.signer)}
+                          className="opacity-0 transition-opacity group-hover:opacity-100"
+                          aria-label="Copy trader address"
+                        >
+                          <Copy size={12} />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 border-b border-white/15">
                       <div className="flex items-center gap-2">
                         <Image
                           src={ZIGCHAIN_ICON}
@@ -875,58 +904,64 @@ const Trades = ({ filters, onAvailableTokens, onFilteredTradesChange }: TradesPr
                         />
                         <span className="text-sm">{ZIGCHAIN_LABEL}</span>
                       </div>
-                  </td>
-                  <td className="px-6 py-4 border-b border-white/15">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-2">
-                        <Image
-                          src={Degenter_ICON}
-                          alt="Degenter"
-                          width={24}
-                          height={24}
-                          className="h-6 w-7  object-cover"
-                        />
-                        <span className="text-sm">{Degenter_Label}</span>
+                    </td>
+                    <td className="px-6 py-4 border-b border-white/15">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                          <Image
+                            src={Degenter_ICON}
+                            alt="Degenter"
+                            width={24}
+                            height={24}
+                            className="h-6 w-7  object-cover"
+                          />
+                          <span className="text-sm">{Degenter_Label}</span>
+                        </div>
+                        <a
+                          href={`https://testnet.zigscan.org/tx/${trade.txHash}`}
+                          target="_blank"
+                          className="p-1.5 bg-white/5 rounded-md hover:bg-white/10 transition-colors"
+                        >
+                          <ExternalLink size={14} className="text-green-400" />
+                        </a>
                       </div>
-                      <a href={`https://testnet.zigscan.org/tx/${trade.txHash}`} target="_blank" className="p-1.5 bg-white/5 rounded-md hover:bg-white/10 transition-colors">
-                        <ExternalLink size={14} className="text-green-400" />
-                      </a>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
                 );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
-        {/* Custom Pagination as seen in UI footer */}
-        <div className="px-6 py-4 flex items-center justify-between border-t border-white/5 bg-black/20">
-          <span className="text-xs text-gray-500">
-            Showing {(currentPage - 1) * tradesPerPage + 1}-{Math.min(currentPage * tradesPerPage, filteredTrades.length)} of {filteredTrades.length}
+      {/* Custom Pagination as seen in UI footer */}
+      <div className="px-6 py-4 flex items-center justify-between border-t border-white/5 bg-black/20">
+        <span className="text-xs text-gray-500">
+          Showing {(currentPage - 1) * tradesPerPage + 1}-
+          {Math.min(currentPage * tradesPerPage, filteredTrades.length)} of{" "}
+          {filteredTrades.length}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30"
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-xs font-medium px-3 py-1 bg-white/10 rounded-md">
+            {currentPage} / {totalPages}
           </span>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30"
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-xs font-medium px-3 py-1 bg-white/10 rounded-md">
-               {currentPage} / {totalPages}
-            </span>
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30"
-              disabled={currentPage === totalPages}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30"
+            disabled={currentPage === totalPages}
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
       </div>
+    </div>
     // </div>
   );
 };

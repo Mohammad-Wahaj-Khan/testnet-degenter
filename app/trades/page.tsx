@@ -102,7 +102,7 @@ const getDefaultFilters = (): TradesFilter => ({
   timeRange: "24H",
   valueRange: "",
   tokenDenom: "",
-  wallet: ""
+  wallet: "",
 });
 
 /* ---------------- Main Page ---------------- */
@@ -114,41 +114,73 @@ export default function FindTrades() {
   const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(true);
   const [availableTokens, setAvailableTokens] = useState<TokenOption[]>([]);
   const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
-  const [tokenOptions, setTokenOptions] = useState<TokenOption[]>([]);
   const [activeTab, setActiveTab] = useState<
     "trades" | "holders" | "security" | "mySwaps" | "topTrades"
   >("trades");
-  const [filters, setFilters] = useState<TradesFilter>(() => getDefaultFilters());
+  const [filters, setFilters] = useState<TradesFilter>(getDefaultFilters());
   const [filtersVisible, setFiltersVisible] = useState(true);
-  const [filteredTradesForExport, setFilteredTradesForExport] = useState<Trade[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const updateFilters = useCallback((updates: Partial<TradesFilter>) => {
-    setFilters(prev => ({ ...prev, ...updates }));
+    setFilters((prev) => {
+      const newFilters = { ...prev, ...updates };
+      // Save to localStorage when filters change
+      if (typeof window !== "undefined") {
+        localStorage.setItem("tradesFilters", JSON.stringify(newFilters));
+      }
+      return newFilters;
+    });
   }, []);
 
   const handleResetFilters = useCallback(() => {
     setFilters(getDefaultFilters());
   }, []);
 
+  const handleTokenSearch = useCallback(
+    (query: string) => {
+      // 1. If query is empty, treat it as a reset for the token filter
+      const trimmedQuery = query.trim();
+
+      setIsSearching(true);
+
+      // 2. Update the filters - This will trigger the useEffect inside <TradesComponent />
+      // which should be calling your /trades or /tokens endpoint
+      updateFilters({ tokenDenom: trimmedQuery });
+
+      // Simulate a small delay for UI feedback
+      setTimeout(() => {
+        setIsSearching(false);
+      }, 500);
+    },
+    [updateFilters]
+  );
+
+  // Add a specific function to clear just the token search
+  const handleClearSearch = useCallback(() => {
+    updateFilters({ tokenDenom: "" });
+  }, [updateFilters]);
   const handleAvailableTokens = useCallback((tokens: TokenOption[]) => {
     setAvailableTokens(tokens);
-    setTokenOptions(tokens);
   }, []);
+
   const toggleFiltersOpen = useCallback(() => {
     setFiltersVisible((prev) => !prev);
   }, []);
 
   const handleFilteredTradesUpdate = useCallback((trades: Trade[]) => {
-    setFilteredTradesForExport(trades);
+    setFilteredTrades(trades);
   }, []);
 
   const handleExportCsv = useCallback(() => {
-    if (
-      typeof window === "undefined" ||
-      typeof document === "undefined" ||
-      !filteredTradesForExport.length
-    )
+    if (typeof window === "undefined" || typeof document === "undefined") {
       return;
+    }
+
+    // If no filtered trades, show a message
+    if (!filteredTrades.length) {
+      alert("No trades to export. Please adjust your filters and try again.");
+      return;
+    }
 
     const headers = [
       "Time",
@@ -165,7 +197,7 @@ export default function FindTrades() {
     const escapeCell = (value: string | number) =>
       `"${String(value).replace(/"/g, '""')}"`;
 
-    const rows = filteredTradesForExport.map((trade) => [
+    const rows = filteredTrades.map((trade) => [
       new Date(trade.time).toISOString(),
       trade.direction,
       trade.valueUsd.toFixed(2),
@@ -190,7 +222,7 @@ export default function FindTrades() {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-  }, [filteredTradesForExport]);
+  }, [filteredTrades]);
   // Add this to a page component
   // useEffect(() => {
   //   console.log('API_BASE:', process.env.NEXT_PUBLIC_API_BASE_URL);
@@ -252,8 +284,14 @@ export default function FindTrades() {
 
     document.title = title;
 
-    const ensureMeta = (key: string, attr: "name" | "property", content: string) => {
-      let tag = document.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);
+    const ensureMeta = (
+      key: string,
+      attr: "name" | "property",
+      content: string
+    ) => {
+      let tag = document.querySelector<HTMLMetaElement>(
+        `meta[${attr}="${key}"]`
+      );
       if (!tag) {
         tag = document.createElement("meta");
         tag.setAttribute(attr, key);
@@ -303,7 +341,7 @@ export default function FindTrades() {
           filtersOpen={filtersVisible}
           onToggleFilters={toggleFiltersOpen}
           onExport={handleExportCsv}
-          hasFilteredTrades={filteredTradesForExport.length > 0}
+          hasFilteredTrades={true} // Always enable the export button
         />
       </div>
 
@@ -317,30 +355,35 @@ export default function FindTrades() {
             >
               <AssetsFilter
                 selectedAssetMode={filters.assetMode}
-                onAssetModeChange={(value) => updateFilters({ assetMode: value })}
+                onAssetModeChange={(value) =>
+                  updateFilters({ assetMode: value })
+                }
                 selectedTime={filters.timeRange}
                 onTimeChange={(value) => updateFilters({ timeRange: value })}
                 selectedValue={filters.valueRange}
                 onValueChange={(value) => updateFilters({ valueRange: value })}
                 selectedToken={filters.tokenDenom}
-                onTokenChange={(value) => updateFilters({ tokenDenom: value })}
-                tokenOptions={tokenOptions}
+                onTokenSearch={handleTokenSearch}
+                tokenOptions={availableTokens}
                 walletAddress={filters.wallet}
-                onWalletAddressChange={(value) => updateFilters({ wallet: value })}
+                onWalletAddressChange={(value) =>
+                  updateFilters({ wallet: value })
+                }
+                onClearSearch={handleClearSearch}
                 onReset={handleResetFilters}
+                isSearching={isSearching}
               />
             </div>
             <div className="flex-1 animate-table">
               <TradesComponent
                 filters={filters}
-                onAvailableTokens={setAvailableTokens}
+                onAvailableTokens={handleAvailableTokens}
                 onFilteredTradesChange={setFilteredTrades}
               />
             </div>
           </section>
         </div>
       </div>
-
     </main>
   );
 }

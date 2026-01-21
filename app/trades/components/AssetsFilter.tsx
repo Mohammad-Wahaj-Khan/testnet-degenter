@@ -1,7 +1,8 @@
 "use client";
 
 import type { ValueRangeLabel } from "./Trades";
-import { RefreshCw, X } from "lucide-react";
+import { RefreshCw, X, Search } from "lucide-react";
+import { useState } from "react";
 
 type AssetMode = "all" | "token";
 const assetModes: { label: string; value: AssetMode }[] = [
@@ -21,11 +22,13 @@ interface AssetsFilterProps {
   onAssetModeChange: (value: AssetMode) => void;
   selectedTime: TimeRange;
   onTimeChange: (value: TimeRange) => void;
+  onClearSearch: () => void;
   selectedValue: ValueRangeLabel | "";
   onValueChange: (value: ValueRangeLabel | "") => void;
   selectedToken: string;
-  onTokenChange: (value: string) => void;
+  onTokenSearch: (searchQuery: string) => void;
   tokenOptions: { denom: string; label: string }[];
+  isSearching: boolean;
   walletAddress: string;
   onWalletAddressChange: (value: string) => void;
   onReset: () => void;
@@ -39,12 +42,16 @@ export default function AssetsFilter({
   selectedValue,
   onValueChange,
   selectedToken,
-  onTokenChange,
+  onTokenSearch,
+  onClearSearch,
   tokenOptions = [],
   walletAddress,
   onWalletAddressChange,
   onReset,
+  isSearching = false,
 }: AssetsFilterProps) {
+  const [localQuery, setLocalQuery] = useState(selectedToken);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   return (
     <div className="w-full max-w-[380px] overflow-hidden rounded-2xl border border-white/10 bg-black text-white shadow-2xl">
@@ -81,7 +88,10 @@ export default function AssetsFilter({
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-medium tracking-wide">Assets</h2>
-            <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
+            <button 
+              onClick={onClearSearch} // Attach the clear function here
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+            >
               <div className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-600">
                 <X className="h-3 w-3 text-black stroke-[3]" />
               </div>
@@ -108,19 +118,86 @@ export default function AssetsFilter({
           </div>
 
           <div className="relative">
-            <select
-              className="w-full appearance-none rounded-lg border border-white/10 bg-[#1a1a1a]/60 px-4 py-2.5 text-sm text-gray-300 outline-none focus:border-white/20"
-              value={selectedToken}
-              onChange={(event) => onTokenChange(event.target.value)}
-            >
-              <option value="">Select a token</option>
-              {tokenOptions.map(({ denom, label }) => (
-                <option key={denom} value={denom}>
-                  {label || denom}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-400" />
+            <div className="relative flex gap-2">
+              <input
+                type="text"
+                placeholder="SEARCH TOKEN (SYMBOL/DENOM)"
+                className="flex-1 rounded-lg border border-white/10 bg-[#1a1a1a]/60 px-4 py-2.5 text-sm text-gray-300 outline-none"
+                value={localQuery}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setLocalQuery(value);
+                  setShowSuggestions(!!value);
+                  
+                  // Clear search when input is empty
+                  if (!value.trim()) {
+                    onClearSearch();
+                  }
+                }}
+                onFocus={() => localQuery && setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onTokenSearch(localQuery);
+                }}
+              />
+              <button
+                onClick={() => onTokenSearch(localQuery)}
+                className="bg-[#FF4D2D] text-white rounded-lg  flex items-center justify-center w-10"
+                disabled={isSearching}
+              >
+                {isSearching ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            {selectedToken && (
+              <div className="mt-2 text-xs text-gray-400 flex justify-between items-center">
+                <span>Showing trades for: <span className="font-medium">
+                  {selectedToken.length > 20 
+                    ? `${selectedToken.slice(0, 10)}...${selectedToken.slice(-7)}`
+                    : selectedToken}
+                </span></span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearSearch();
+                    setLocalQuery('');
+                  }}
+                  className="text-[#FF4D2D] hover:underline text-xs"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+            {showSuggestions && localQuery && tokenOptions.length > 0 && (
+              <div className="absolute z-10 mt-1 w-full bg-[#1a1a1a] border border-white/10 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {tokenOptions.length === 0 && (
+                  <div className="px-4 py-2 text-sm text-gray-400">No tokens found</div>
+                )}
+                {tokenOptions
+                  .filter(option => 
+                    option.label.toLowerCase().includes(localQuery.toLowerCase()) ||
+                    option.denom.toLowerCase().includes(localQuery.toLowerCase())
+                  )
+                  .slice(0, 5)
+                  .map((option) => (
+                    <div
+                      key={option.denom}
+                      className="px-4 py-2 text-sm text-gray-300 hover:bg-white/5 cursor-pointer flex items-center gap-2"
+                      onMouseDown={() => {
+                        setLocalQuery(option.label);
+                        onTokenSearch(option.denom);
+                        setShowSuggestions(false);
+                      }}
+                    >
+                      <span className="font-medium">{option.label}</span>
+                      <span className="text-xs text-gray-500">{option.denom}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

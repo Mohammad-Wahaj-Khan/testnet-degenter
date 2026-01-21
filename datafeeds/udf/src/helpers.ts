@@ -23,7 +23,7 @@ export function logMessage(message: string): void {
 	if (isLoggingEnabled) {
 		const now = new Date();
 		// eslint-disable-next-line no-console
-		console.log(`${now.toLocaleTimeString()}.${now.getMilliseconds()}> ${message}`);
+		// console.log(`${now.toLocaleTimeString()}.${now.getMilliseconds()}> ${message}`);
 	}
 }
 

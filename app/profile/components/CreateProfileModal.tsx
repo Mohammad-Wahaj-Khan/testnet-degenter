@@ -229,7 +229,7 @@ export default function CreateProfileModal({
               <input
                 value={handle}
                 onChange={(event) => setHandle(event.target.value)}
-                placeholder="for get api"
+                placeholder="Unique Name (e.g., john_doe)"
                 className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-neutral-200"
               />
             </div>
@@ -238,7 +238,7 @@ export default function CreateProfileModal({
               <input
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Your display name"
+                placeholder="Your Display name"
                 className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-neutral-200"
               />
             </div>

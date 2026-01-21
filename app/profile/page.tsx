@@ -103,13 +103,13 @@ export default function ProfilePage() {
       if (!address || !apiKey) return;
 
       try {
-        console.log("Checking profile for wallet:", address);
+        // console.log("Checking profile for wallet:", address);
         setIsLoading(true);
 
         try {
           // First try to get the profile by wallet
           const walletProfile = await getProfileByWallet(address, apiKey);
-          console.log("Found existing profile:", walletProfile);
+          // console.log("Found existing profile:", walletProfile);
 
           // Check if this is a valid profile (has a handle and user_id)
           if (walletProfile?.handle && walletProfile?.user_id) {
@@ -122,9 +122,9 @@ export default function ProfilePage() {
           }
         } catch (error) {
           // If we get a 404 or any other error, treat as no profile
-          console.log(
-            "No profile found for wallet, showing create profile modal"
-          );
+          // console.log(
+          //   "No profile found for wallet, showing create profile modal"
+          // );
           setHasProfile(false);
           setProfile({
             ...defaultProfile,
@@ -148,10 +148,10 @@ export default function ProfilePage() {
     };
 
     if (isWalletConnected && address) {
-      console.log("Wallet connected, checking profile...");
+      // console.log("Wallet connected, checking profile...");
       checkWalletProfile();
     } else {
-      console.log("Wallet not connected or no address");
+      // console.log("Wallet not connected or no address");
     }
   }, [address, isWalletConnected, apiKey]);
 
@@ -285,7 +285,7 @@ export default function ProfilePage() {
         ],
       };
 
-      console.log("Creating/Updating profile with data:", initialProfileData);
+      // console.log("Creating/Updating profile with data:", initialProfileData);
 
       // First create/update the profile
       let saved;
@@ -304,7 +304,7 @@ export default function ProfilePage() {
       // Then handle the image upload if it's a base64 string
       if (saved?.user_id && payload.image_url?.startsWith("data:")) {
         try {
-          console.log("Uploading profile image...");
+          // console.log("Uploading profile image...");
           // Convert base64 to file
           const base64Response = await fetch(payload.image_url);
           const blob = await base64Response.blob();
