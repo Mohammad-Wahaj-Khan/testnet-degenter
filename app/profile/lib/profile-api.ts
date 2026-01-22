@@ -203,7 +203,7 @@ export async function uploadProfileImage(
 
     // Build the specific absolute URL format with a cache-busting timestamp
     const timestamp = new Date().getTime();
-    const finalUrl = `http://testnetmedia.degenter.io/degenter-media/profiles/${userId}/${fileName}?t=${timestamp}`;
+    const finalUrl = `https://testnetmedia.degenter.io/degenter-media/profiles/${userId}/${fileName}?t=${timestamp}`;
 
     return { image_url: finalUrl };
   }

@@ -488,7 +488,7 @@ export default function Navbar() {
           <div className="justify-self-end flex items-center gap-4 lg:gap-8 shrink-0">
             <div className="hidden lg:flex flex-1 justify-center">
               <nav className="flex items-center gap-4 xl:gap-10">
-                <FindTradersNavItem />
+                {/* <FindTradersNavItem /> */}
                 <ExploreNavItem />
                 <NavItem label="Wallet Tracker" hasDropdown />
                 <NavItem label="Earn" hasDropdown />
@@ -666,7 +666,7 @@ export default function Navbar() {
 
             {/* Navigation links */}
             <nav className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">
-              <FindTradersNavItem />
+              {/* <FindTradersNavItem /> */}
               <ExploreNavItem />
               <NavItem label="Wallet Tracker" hasDropdown />
               <NavItem label="Earn" hasDropdown />
@@ -782,6 +782,7 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
       subtitle: "Find the best trading opportunities",
       href: "/trades",
       locked: false,
+      isNew: true,
     },
     {
       icon: FaGem,
@@ -811,16 +812,16 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
       icon: FaChartLine,
       title: "Insight",
       subtitle: "Market insights and analytics",
-      href: "/insights",
-      locked: false,
-    },
-    {
-      icon: FaPlusCircle,
-      title: "New Listing",
-      subtitle: "Recently listed tokens",
       href: "/",
-      locked: false,
+      locked: true,
     },
+    // {
+    //   icon: FaPlusCircle,
+    //   title: "New Listing",
+    //   subtitle: "Recently listed tokens",
+    //   href: "/",
+    //   locked: false,
+    // },
   ];
 
   if (mobile) {
