@@ -177,7 +177,7 @@ export async function uploadProfileImage(
   formData.append("file", file);
 
   const response = await fetch(
-    `https://testnet-api.degenter.io/profiles/${userId}/avatar`,
+    `${process.env.NEXT_PUBLIC_API_BASE}/profiles/${userId}/avatar`,
     {
       method: "POST",
       headers: {

@@ -191,7 +191,7 @@ export default function WalletAnalyzerSidebar({
         const [holdingsResponse, chartResponse] = await Promise.all([
           fetchFromEndpoints(
             HOLDINGS_API_ENDPOINTS,
-            `wallets/${encodeURIComponent(address)}/portfolio/holdings`,
+            `wallets/${encodeURIComponent(address)}/portfolio/holdings?source=chain`,
             {
               cache: "no-store",
               signal: controller.signal,
@@ -203,7 +203,7 @@ export default function WalletAnalyzerSidebar({
             HOLDINGS_API_ENDPOINTS,
             `wallets/${encodeURIComponent(
               address
-            )}/portfolio/value-series?win=30d&tf=1d`,
+            )}/portfolio/value-series?win=30d&tf=1h`,
             {
               cache: "no-store",
               signal: controller.signal,

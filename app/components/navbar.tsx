@@ -172,7 +172,7 @@ export default function Navbar() {
 
   // Wallet (unchanged behavior)
   const { address, connect, disconnect, openView } = useChain(
-    (CHAIN_NAME as string) || "zigchain-1"
+    (CHAIN_NAME as string) || "zig-test-2"
   );
 
   // Load wallet connection on initial render
@@ -547,7 +547,8 @@ export default function Navbar() {
                     {!address ? (
                       <div className="mt-4 text-center">
                         <p className="text-sm text-white/80 mb-4">
-                          Create your profile with a unique ID and update it anytime.
+                          Create your profile with a unique ID and update it
+                          anytime.
                         </p>
                         <button
                           onClick={() => {
@@ -563,8 +564,8 @@ export default function Navbar() {
                       <p className="mt-2 text-sm leading-relaxed text-white/80">
                         Your profile is where you check your portfolio, track
                         achievements, and keep your wallet details ready.
-                        It&apos;s the entry point to manage settings, preferences,
-                        and view your live stats.
+                        It&apos;s the entry point to manage settings,
+                        preferences, and view your live stats.
                       </p>
                     )}
                     <div className="mt-3 flex items-center justify-between text-[10px] uppercase tracking-[0.3em] text-white/40">
@@ -788,8 +789,8 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
       icon: FaGem,
       title: "Find Gems",
       subtitle: "Discover hidden gems",
-      href: "#",
-      locked: true,
+      href: "/findgems",
+      locked: false,
     },
     {
       icon: FaLink,
@@ -841,7 +842,7 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
           />
         </button>
         {isOpen && (
-          <div className="mt-2 rounded-lg bg-black p-4 backdrop-blur-sm">
+          <div className="mt-2 rounded-lg bg-black p-4 backdrop-blur-sm z-10">
             <div className="grid grid-cols-2 gap-4">
               {menuItems.map((item, index) => (
                 <Link
