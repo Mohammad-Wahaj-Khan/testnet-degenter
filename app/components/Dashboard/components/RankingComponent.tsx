@@ -1,8 +1,10 @@
 "use client";
 
 import Image from "next/image";
+import type { StaticImageData } from "next/image";
 import React, { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import img from "@/public/zigicon.png"
 function isWebGLAvailable(): boolean {
   if (typeof window === "undefined") return false;
 
@@ -29,7 +31,7 @@ export interface RankingItem {
   price_change_percentage_24h: number;
   market_cap: number;
   total_volume: number;
-  image: string;
+  image: string | StaticImageData;
   tx: number;
   tokenId?: string;
   color?: string;
@@ -45,7 +47,7 @@ export interface Token {
   price_change_percentage_24h: number;
   market_cap: number;
   total_volume: number;
-  image: string;
+  image: string | StaticImageData;
   tx: number;
   tokenId?: string;
 }
@@ -86,7 +88,7 @@ const RankingComponent: React.FC<{
     price_change_percentage_24h: 0,
     market_cap: 0,
     total_volume: 0,
-    image: "",
+    image: img,
     tx: 0,
     color: "from-gray-500 to-gray-600",
     textGradient: "from-gray-400 to-gray-500",
@@ -108,7 +110,7 @@ const RankingComponent: React.FC<{
     price_change_percentage_24h: token.price_change_percentage_24h || 0,
     market_cap: token.market_cap || 0,
     total_volume: token.total_volume || 0,
-    image: token.image || "",
+    image: token.image || img,
     tx: token.tx || 0,
     tokenId: token.tokenId,
     color:
@@ -581,7 +583,7 @@ const RankingComponent: React.FC<{
       />
       <div
         ref={listRef}
-        className="h-[480px] md:h-[500px] overflow-y-scroll no-scrollbar space-y-5 relative z-10 overscroll-contain"
+        className="h-[480px] md:h-[500px] overflow-y-scroll no-scrollbar space-y-5 relative z-10 overscroll-contain pt-[120px]"
         style={{
           perspective: "1400px",
           transformStyle: "preserve-3d",

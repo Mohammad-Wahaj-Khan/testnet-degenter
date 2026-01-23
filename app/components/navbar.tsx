@@ -790,6 +790,7 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
       title: "Find Gems",
       subtitle: "Discover hidden gems",
       href: "/findgems",
+      isNew: true,
       locked: false,
     },
     {
