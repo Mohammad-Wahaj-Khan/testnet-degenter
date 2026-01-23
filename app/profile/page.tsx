@@ -369,7 +369,7 @@ export default function ProfilePage() {
   return (
     <main className="flex min-h-screen flex-col bg-black relative overflow-hidden p-0 md:px-4">
       <div
-        className="fixed top-0 left-0 right-0 z-0 h-56 pointer-events-none"
+        className="absolute inset-0 z-1 h-60"
         style={{
           backgroundImage: `
               linear-gradient(

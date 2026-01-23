@@ -8,7 +8,7 @@ export default function Home() {
     <>
       <main className="flex min-h-screen flex-col bg-black relative overflow-hidden">
         <div
-          className="fixed top-0 left-0 right-0 z-0 h-60 pointer-events-none"
+          className="absolute inset-0 z-1 h-60"
           style={{
             backgroundImage: `
             linear-gradient(
@@ -36,7 +36,7 @@ export default function Home() {
           {/* Fade overlay to blend bottom edge */}
           <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-black"></div>
         </div>
-        <div className="relative z-10">
+        <div className="z-10">
           <Navbar />
           <TopMarketToken />
           <Dashboard />
