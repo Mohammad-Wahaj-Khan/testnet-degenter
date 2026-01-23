@@ -458,38 +458,43 @@ export default function WalletAnalyzer({
 
   const formatCurrencyCompact = (value: number) => {
     if (!Number.isFinite(value)) return "N/A";
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: "USD",
-      notation: "compact",
+    const formatter = new Intl.NumberFormat('en-US', {
+      notation: 'compact',
       maximumFractionDigits: 2,
-    }).format(value);
+      minimumFractionDigits: 0
+    });
+    return `$${formatter.format(value)}`;
   };
 
   const formatSignedCurrency = (value: number) => {
     if (!Number.isFinite(value)) return "N/A";
     if (value === 0) return formatCurrencyCompact(value);
     const prefix = value > 0 ? "+" : "-";
-    return `${prefix}${formatCurrencyCompact(Math.abs(value))}`;
+    const formatter = new Intl.NumberFormat('en-US', {
+      notation: 'compact',
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 0
+    });
+    return `${prefix}$${formatter.format(Math.abs(value))}`;
   };
 
   const formatCurrencySmart = (value: number) => {
     if (!Number.isFinite(value)) return "N/A";
     if (Math.abs(value) >= 1000) return formatCurrencyCompact(value);
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 6,
+    return `$${value.toLocaleString('en-US', {
       minimumFractionDigits: 2,
-    }).format(value);
+      maximumFractionDigits: 6
+    })}`;
   };
 
   const formatNumberCompact = (value: number) => {
     if (!Number.isFinite(value)) return "0";
-    return new Intl.NumberFormat(undefined, {
-      notation: "compact",
+    const formatter = new Intl.NumberFormat('en-US', {
+      notation: 'compact',
       maximumFractionDigits: 2,
-    }).format(value);
+      minimumFractionDigits: 0
+    });
+    return formatter.format(value);
   };
 
   const formatHoldMinutes = (seconds: number, totalCount: number) => {

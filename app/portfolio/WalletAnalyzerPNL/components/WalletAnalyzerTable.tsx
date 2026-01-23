@@ -126,19 +126,23 @@ const formatTokenBalance = (value: number) => {
 
 const formatCurrencyCompact = (value: number) => {
   if (!Number.isFinite(value)) return "N/A";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    notation: "compact",
+  const formatter = new Intl.NumberFormat('en-US', {
+    notation: 'compact',
     maximumFractionDigits: 2,
-  }).format(value);
+    minimumFractionDigits: 0
+  });
+  return `$${formatter.format(value)}`;
 };
 
 const formatSignedCurrency = (value: number) => {
   if (!Number.isFinite(value)) return "N/A";
   if (value === 0) return formatCurrencyCompact(value);
   const prefix = value > 0 ? "+" : "-";
-  return `${prefix}${formatCurrencyCompact(Math.abs(value))}`;
+  return `${prefix}$${new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0
+  }).format(Math.abs(value))}`;
 };
 
 const formatPercent = (value: number) => {
@@ -149,12 +153,10 @@ const formatPercent = (value: number) => {
 
 const formatPriceUsd = (value: number) => {
   if (!Number.isFinite(value)) return "N/A";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 6,
+  return `$${value.toLocaleString('en-US', {
     minimumFractionDigits: 2,
-  }).format(value);
+    maximumFractionDigits: 6
+  })}`;
 };
 
 const formatHoldDurationMinutes = (seconds: number) => {
@@ -217,9 +219,7 @@ export default function WalletAnalyzerTable({
           PNL_API_ENDPOINTS,
           `wallets/${encodeURIComponent(
             address
-          )}/pnl/tokens?win=${encodeURIComponent(
-            win
-          )}&sort=total_pnl_desc&limit=100`,
+          )}/pnl/tokens?win=30d&sort=total_pnl_desc&limit=100`,
           {
             cache: "no-store",
             signal: controller.signal,

@@ -85,12 +85,10 @@ const fetchFromEndpoints = async (
 
 const formatUsdValue = (value?: number) => {
   if (value == null || !Number.isFinite(value)) return "—";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
+  return `$${value.toLocaleString('en-US', {
     minimumFractionDigits: 2,
-  }).format(value);
+    maximumFractionDigits: 2
+  })}`;
 };
 
 const formatZigValue = (value?: number) => {

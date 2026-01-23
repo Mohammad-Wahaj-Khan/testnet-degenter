@@ -102,12 +102,16 @@ const fetchFromEndpoints = async (
 
 const formatCurrencyCompact = (value: number) => {
   if (!Number.isFinite(value)) return "N/A";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    notation: "compact",
+  
+  // Format the number with compact notation
+  const formatter = new Intl.NumberFormat('en-US', {
+    notation: 'compact',
     maximumFractionDigits: 2,
-  }).format(value);
+    minimumFractionDigits: 0
+  });
+  
+  // Format the number and add $ sign
+  return `$${formatter.format(value)}`;
 };
 
 const formatWalletAddress = (value?: string) => {
