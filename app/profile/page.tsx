@@ -278,7 +278,7 @@ export default function ProfilePage() {
 
       // Create initial profile data without the image if it's a base64 string
       const initialProfileData = {
-        handle: profile.handle,
+        handle: payload.handle,
         display_name: payload.display_name || payload.handle,
         bio: payload.bio || "",
         image_url: imageUrl.startsWith("data:") ? "" : imageUrl, // Don't send base64 directly

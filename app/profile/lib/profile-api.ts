@@ -177,7 +177,7 @@ export async function uploadProfileImage(
   formData.append("file", file);
 
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE}/profiles/${userId}/avatar`,
+    `${API_BASE}/profiles/${userId}/avatar`,
     {
       method: "POST",
       headers: {
