@@ -422,19 +422,46 @@ export default function Navbar() {
     let isActive = true;
     const loadProfileImage = async () => {
       try {
-        const response = await fetch(`${API_BASE}/profiles/${handle}`, {
+        // First, get the user profile by wallet address to get the user_id
+        const profileResponse = await fetch(`${API_BASE}/profiles/by-wallet/${handle}`, {
           headers: apiKey ? { "x-api-key": apiKey } : undefined,
         });
+        
+        if (!profileResponse.ok) {
+          if (isActive) setProfileImageUrl(null);
+          return;
+        }
+        
+        const profileData = await profileResponse.json();
+        const userId = profileData?.data?.user_id;
+        
+        if (!userId) {
+          if (isActive) setProfileImageUrl(null);
+          return;
+        }
+
+        // Then fetch the profile details using the user_id
+        const response = await fetch(`${API_BASE}/profiles/${userId}`, {
+          headers: apiKey ? { "x-api-key": apiKey } : undefined,
+        });
+        
         if (!response.ok) {
           if (isActive) setProfileImageUrl(null);
           return;
         }
+        
         const json = await response.json();
         const imageUrl = json?.data?.image_url ?? json?.image_url ?? null;
+        
         if (isActive) {
           setProfileImageUrl(imageUrl);
+          // Store the handle in localStorage for guest users
+          if (json?.data?.handle && !address) {
+            localStorage.setItem(GUEST_HANDLE_KEY, json.data.handle);
+          }
         }
-      } catch {
+      } catch (error) {
+        console.error('Error loading profile:', error);
         if (isActive) setProfileImageUrl(null);
       }
     };

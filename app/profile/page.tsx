@@ -161,7 +161,6 @@ export default function ProfilePage() {
     if (address === lastWalletAddress) return;
 
     setLastWalletAddress(address);
-    setProfile(defaultProfile); // Reset profile to show loading state
 
     // Force a reload of the profile data
     const loadProfile = async () => {
@@ -170,8 +169,12 @@ export default function ProfilePage() {
       try {
         setIsLoading(true);
         const profileData = await getProfileByWallet(address, apiKey);
-        setProfile(profileData);
-        setHasProfile(!!profileData?.handle);
+        if (profileData?.handle) {
+          setProfile(profileData);
+          setHasProfile(true);
+        } else {
+          setHasProfile(false);
+        }
       } catch (error) {
         console.error("Failed to load profile:", error);
         setHasProfile(false);
@@ -213,19 +216,25 @@ export default function ProfilePage() {
     let isActive = true;
 
     const loadProfile = async () => {
-      setIsLoading(true);
       setError("");
 
       try {
+        // Don't load again if we already have profile data
+        if (profile.handle && profile.user_id) {
+          return;
+        }
+        
         if (!userId && !handle && !address && !guestWalletId) {
           setIsLoading(false);
           return;
         }
+        
+        setIsLoading(true);
         const effectiveHandle = handle || address || guestWalletId;
         const data = userId
           ? await getProfileById(userId, apiKey)
           : await getProfile(effectiveHandle, apiKey);
-        if (isActive) {
+        if (isActive && data?.handle) {
           setProfile(data);
           setHasProfile(true);
         }
@@ -233,7 +242,9 @@ export default function ProfilePage() {
         if (isActive) {
           setError("Unable to load profile from the API.");
           setHasProfile(false);
-          setIsModalOpen(true);
+          if (!profile.handle) {
+            setIsModalOpen(true);
+          }
         }
       } finally {
         if (isActive) {
@@ -247,7 +258,7 @@ export default function ProfilePage() {
     return () => {
       isActive = false;
     };
-  }, [handle, userId, address, apiKey, guestWalletId]);
+  }, [handle, userId, apiKey, guestWalletId]);
 
   const handleUpgrade = () => {
     setIsModalOpen(true);
@@ -358,7 +369,7 @@ export default function ProfilePage() {
   return (
     <main className="flex min-h-screen flex-col bg-black relative overflow-hidden p-0 md:px-4">
       <div
-        className="absolute inset-0 z-0 h-56"
+        className="fixed top-0 left-0 right-0 z-0 h-56 pointer-events-none"
         style={{
           backgroundImage: `
               linear-gradient(
@@ -376,11 +387,11 @@ export default function ProfilePage() {
         <div className="absolute inset-0 opacity-30 mix-blend-overlay pointer-events-none" />
         <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-black" />
       </div>
-      <div className="animate-header relative z-20">
+      <div className="animate-header relative z-20 pt-2">
         <Navbar />
         <TopMarketToken />
       </div>
-      <div className="grid min-h-screen grid-cols-1 pt-20 px-6 md:grid-cols-[260px,1fr]">
+      <div className="grid relative z-10 min-h-screen grid-cols-1 pt-20 px-6 md:grid-cols-[260px,1fr]">
         <ProfileSidebar />
         <section className="px-6 py-6 md:px-10">
           <div className="flex items-center justify-between">
