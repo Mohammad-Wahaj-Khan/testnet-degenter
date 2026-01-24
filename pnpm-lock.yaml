@@ -56,6 +56,9 @@ importers:
       '@web3modal/standalone':
         specifier: ^2.4.3
         version: 2.4.3(react@19.1.0)
+      bignumber.js:
+        specifier: ^9.3.1
+        version: 9.3.1
       chain-registry:
         specifier: ^1.63.37
         version: 1.69.413

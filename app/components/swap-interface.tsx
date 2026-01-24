@@ -5,6 +5,7 @@
 
 import dynamic from "next/dynamic";
 import { ArrowUpDown, Search, ShieldCheck, X } from "lucide-react";
+import BigNumber from 'bignumber.js';
 import React, {
   memo,
   useCallback,
@@ -16,6 +17,7 @@ import React, {
 import type { Coin } from "@cosmjs/stargate";
 import type { MsgExecuteContractEncodeObject } from "@cosmjs/cosmwasm-stargate";
 import PriceDisplay from "./PriceDisplay";
+import { useRouterWrapper } from "./RouterWrapper";
 
 const TwapForm = dynamic(
   () => import("./twap/SwapForm").then((mod) => mod.SwapForm),
@@ -137,8 +139,8 @@ function parseRouterKeyFromError(msg: string) {
 
 const ZIG_ICON =
   "https://pbs.twimg.com/profile_images/1929879248212275200/Yzkbsu74_400x400.png";
-const ROUTER_CONTRACT =
-  "zig10jc4vr9vfq0ykkmfvfgz430w8z6hwdlqhmjdy9jypts8wfrrwnnqvp8sgy";
+const ROUTER_WRAPPER = "zig1qd2xfwrn35sctcgr3kd9z2tcehe23802vtxx76xhqhqduzemxmtq66l0my";
+const ROUTER_CONTRACT = "zig10jc4vr9vfq0ykkmfvfgz430w8z6hwdlqhmjdy9jypts8wfrrwnnqvp8sgy";
 const MEMO = "Traded from degenter.io";
 const GAS_PRICE_STR = "0.025uzig";
 const SINGLE_HOP_GAS_FALLBACK = 420_000;
@@ -800,7 +802,16 @@ export default function SwapInterface({
   /* =========================
    * SWAP (single hop direct pair OR router via operations)
    * ========================= */
-  async function onSwap() {
+  const routerWrapper = useRouterWrapper({
+    routerAddress: ROUTER_WRAPPER,
+    treasuryAddress: "zig1ynpdz78s5a0ka89jl92vw2dhpa3ujw87z9mxzs", // Treasury address
+    multiHopFeeRate: "0.1", // 10% for multi-hop swaps
+    singleHopFeeRate: "0.01", // 1% for single-hop swaps
+    chainId,
+    rpcUrl,
+  });
+
+  async function handleSwap() {
     try {
       setErr("");
       if (routePairs.length === 0) throw new Error("Route not ready");
@@ -811,12 +822,43 @@ export default function SwapInterface({
       if (!Number.isFinite(amt) || amt <= 0)
         throw new Error("Enter a valid amount");
 
-      setBusy(true);
-
-      const amountInMicro =
-        activePay.decimals === 0
-          ? Math.round(amt).toString()
-          : Math.round(amt * pow10(activePay.decimals)).toString();
+      // Get the user's balance for the token being swapped
+      const balanceKey = activePay.type === 'native' 
+        ? activePay.denom 
+        : activePay.contract;
+      
+      if (!balanceKey) {
+        throw new Error('Invalid token configuration');
+      }
+      
+      // Convert balance to smallest unit (micro) and ensure it's an integer
+      const userBalanceMicro = new BigNumber(balances[balanceKey] || '0')
+        .multipliedBy(10 ** activePay.decimals)
+        .integerValue(BigNumber.ROUND_DOWN);
+      
+      // Convert the requested amount to micro units
+      const requestedAmount = new BigNumber(amountIn || '0');
+      const requestedAmountMicro = requestedAmount
+        .multipliedBy(10 ** activePay.decimals)
+        .integerValue(BigNumber.ROUND_DOWN);
+      
+      // console.log('=== SWAP DEBUG ===');
+      // console.log('Input amount:', amountIn);
+      // console.log('Token decimals:', activePay.decimals);
+      // console.log('Requested amount (micro):', requestedAmountMicro.toString());
+      // console.log('User balance (micro):', userBalanceMicro.toString());
+      // console.log('Balance key:', balanceKey);
+      // console.log('Active pay token:', activePay);
+      // console.log('All balances:', balances);
+      // console.log('==================');
+      
+      // Ensure we don't exceed user's balance
+      if (requestedAmountMicro.gt(userBalanceMicro)) {
+        const available = userBalanceMicro.dividedBy(10 ** activePay.decimals).toFixed(6);
+        throw new Error(`Insufficient balance. Available: ${available} ${activePay.symbol}`);
+      }
+      
+      const amountInMicro = requestedAmountMicro.toString();
 
       const chosenSlippage = slippageBps / 10_000;
       const max_spread_str = Math.max(
@@ -882,155 +924,54 @@ export default function SwapInterface({
       );
       const minimum_receive = String(Math.max(0, minReceiveMicroNum));
 
-      if (routePairs.length === 1) {
-        const pair = routePairs[0];
-        if (activePay.type === "native") {
-          const { coins } = await import("@cosmjs/stargate");
-          const msg = {
-            swap: {
-              max_spread: max_spread_str,
-              offer_asset: {
-                amount: amountInMicro,
-                info: { native_token: { denom: (activePay as any).denom } },
-              },
-              to: address,
-            },
-          };
-          const funds = coins(amountInMicro, (activePay as any).denom);
-          const { fee } = await buildFee(pair.pairContract, msg, funds);
-          const res = await client.execute(
-            address,
-            pair.pairContract,
-            msg as any,
-            fee,
-            MEMO,
-            funds
-          );
-          setTxHash(res.transactionHash);
-          setShowTxAlert(true);
-          setAmountIn(""); // Clear the input field after successful swap
-        } else {
-          const ask_asset_info =
-            activeReceive.type === "native"
-              ? { native_token: { denom: (activeReceive as any).denom } }
-              : { token: { contract_addr: (activeReceive as any).contract } };
-          const inner = {
-            swap: {
-              belief_price: undefined,
-              max_spread: max_spread_str,
-              ask_asset_info,
-              to: address,
-            },
-          };
-          const msg64 = b64(inner);
-          const sendMsg = {
-            send: {
-              contract: pair.pairContract,
-              amount: amountInMicro,
-              msg: msg64,
-            },
-          };
-          const { fee } = await buildFee(
-            (activePay as any).contract,
-            sendMsg,
-            [],
-            false
-          );
-          const res = await client.execute(
-            address,
-            (activePay as any).contract,
-            sendMsg as any,
-            fee,
-            MEMO
-          );
-          setTxHash(res.transactionHash);
-          setShowTxAlert(true);
-          setAmountIn(""); // Clear the input field after successful swap
-        }
-      } else {
-        // router path
-        const operations = routePairs.map((p, idx) => {
-          const isFirst = idx === 0;
-          const isLast = idx === routePairs.length - 1;
-
-          const offer_asset_info = isFirst
-            ? activePay.type === "native"
-              ? { native_token: { denom: (activePay as any).denom } }
-              : { token: { contract_addr: (activePay as any).contract } }
-            : { native_token: { denom: "uzig" } };
-
-          const ask_asset_info = isLast
-            ? activeReceive.type === "native"
-              ? { native_token: { denom: (activeReceive as any).denom } }
-              : { token: { contract_addr: (activeReceive as any).contract } }
-            : { native_token: { denom: "uzig" } };
-
-          const normalizedType = toRouterPairType(p.pairType);
-          return {
-            oro_swap: {
-              offer_asset_info,
-              ask_asset_info,
-              pair_type: normalizedType,
-            },
-          };
-        });
-
-        const msgNative = {
-          execute_swap_operations: {
-            operations,
-            minimum_receive,
-            max_spread: max_spread_str,
-            to: address,
-          },
+      // Create swap operations for the router wrapper
+      const operations = routePairs.map((leg) => {
+        const normalizedType = toRouterPairType(leg.pairType);
+        
+        // Determine asset types based on the active pay token
+        const offerAssetInfo = activePay.type === 'native'
+          ? { native_token: { denom: activePay.denom } }
+          : { token: { contract_addr: activePay.contract! } };
+        
+        const askAssetInfo = activeReceive.type === 'native'
+          ? { native_token: { denom: activeReceive.denom || 'uzig' } }
+          : { token: { contract_addr: activeReceive.contract! } };
+        
+        return {
+          oro_swap: {
+            offer_asset_info: offerAssetInfo,
+            ask_asset_info: askAssetInfo,
+            pair_type: normalizedType,
+            pair_address: leg.pairContract,
+          }
         };
+      });
 
-        if (activePay.type === "native") {
-          const { coins } = await import("@cosmjs/stargate");
-          const funds = coins(amountInMicro, (activePay as any).denom);
-          const { fee } = await buildFee(
-            ROUTER_CONTRACT,
-            msgNative,
-            funds,
-            true
-          );
-          const res = await client.execute(
-            address,
-            ROUTER_CONTRACT,
-            msgNative as any,
-            fee,
-            MEMO,
-            funds
-          );
-          setTxHash(res.transactionHash);
-          setShowTxAlert(true);
-          setAmountIn(""); // Clear the input field after successful swap
-        } else {
-          const msg64 = b64(msgNative);
-          const sendMsg = {
-            send: {
-              contract: ROUTER_CONTRACT,
-              amount: amountInMicro,
-              msg: msg64,
-            },
-          };
-          const { fee } = await buildFee(
-            (activePay as any).contract,
-            sendMsg,
-            [],
-            true
-          );
-          const res = await client.execute(
-            address,
-            (activePay as any).contract,
-            sendMsg as any,
-            fee,
-            MEMO
-          );
-          setTxHash(res.transactionHash);
-          setShowTxAlert(true);
-          setAmountIn(""); // Clear the input field after successful swap
-        }
-      }
+      // Execute the swap through the router wrapper
+      const result = await routerWrapper.executeSwap(
+        client,
+        address,
+        operations,
+        amountInMicro,
+        {
+          type: activePay.type,
+          denom: (activePay as any).denom,
+          contract: (activePay as any).contract,
+        },
+        minimum_receive,
+        max_spread_str,
+        MEMO
+      );
+
+      // console.log('=== SWAP COMPLETE ===');
+      // console.log('Transaction hash:', result.transactionHash);
+      // console.log('Fee amount:', result.fee);
+      // console.log('Treasury amount:', result.treasuryAmount);
+      // console.log('====================');
+
+      setTxHash(result.transactionHash);
+      setShowTxAlert(true);
+      setAmountIn(""); // Clear the input field after successful swap
 
       // refresh pay balance
       const v = await loadBalanceFor(client, address, {
@@ -1834,7 +1775,7 @@ export default function SwapInterface({
           ) : (
             <div className="space-y-2 mt-3">
               <button
-                onClick={onSwap}
+                onClick={handleSwap}
                 disabled={busy || routePairs.length === 0}
                 className="w-full bg-[#39C8A6] text-black font-medium text-[1rem] py-3 rounded-lg hover:bg-[#2fb896] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
