@@ -29,10 +29,10 @@ interface Token {
 
 const DASHBOARD_TOP_TOKENS_CACHE_KEY = "degenter_dashboard_top_tokens";
 const DASHBOARD_TOP_TOKENS_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "https://testnet-api.degenter.io").replace(
-  /\/+$/,
-  ""
-);
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "${process.env.NEXT_PUBLIC_API_BASE_URL}"
+).replace(/\/+$/, "");
 
 type DashboardTokensCache = {
   tokens: Token[];
@@ -47,9 +47,7 @@ type DashboardTokensCache = {
 const readDashboardCache = (): DashboardTokensCache | null => {
   if (typeof window === "undefined") return null;
   try {
-    const cached = window.localStorage.getItem(
-      DASHBOARD_TOP_TOKENS_CACHE_KEY
-    );
+    const cached = window.localStorage.getItem(DASHBOARD_TOP_TOKENS_CACHE_KEY);
     if (!cached) return null;
     const parsed: DashboardTokensCache = JSON.parse(cached);
     if (!parsed || typeof parsed.timestamp !== "number") return null;

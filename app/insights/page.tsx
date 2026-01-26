@@ -4,9 +4,12 @@ import Navbar from "../components/navbar";
 import TopMarketToken from "../components/TopMarketToken";
 
 async function getTokenData() {
-  const res = await fetch("https://testnet-api.degenter.io/tokens", {
-    next: { revalidate: 60 },
-  });
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}/tokens`,
+    {
+      next: { revalidate: 60 },
+    }
+  );
   const json = await res.json();
 
   const items = Array.isArray(json?.data) ? json.data : [];
@@ -25,34 +28,65 @@ async function getTokenData() {
       let priceChange =
         item?.price?.changePct ?? item?.priceChange ?? item?.price?.change;
 
-      if (!hasValidChange(priceChange) && tokenId) {
+      // Ensure priceChange is an object with timeframes
+      if (typeof priceChange === "number") {
+        priceChange = { "24h": priceChange };
+      } else if (!priceChange || typeof priceChange !== "object") {
+        priceChange = { "24h": 0 };
+      }
+
+      // Ensure volume data is properly structured
+      let volumeUSD = item.volumeUSD || {};
+      if (typeof item.volUsd === "number") {
+        volumeUSD = { "24h": item.volUsd };
+      }
+
+      if ((!hasValidChange(priceChange) || !volumeUSD["24h"]) && tokenId) {
         try {
           const detailRes = await fetch(
-            `https://testnet-api.degenter.io/tokens/${tokenId}`,
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/tokens/${tokenId}`,
             { next: { revalidate: 60 } }
           );
           if (detailRes.ok) {
             const detailJson = await detailRes.json();
-            priceChange =
-              detailJson?.data?.price?.changePct ??
-              detailJson?.data?.priceChange ??
-              priceChange;
+            const detailData = detailJson?.data;
+
+            // Update priceChange with detailed data if available
+            const detailedPriceChange =
+              detailData?.price?.changePct ?? detailData?.priceChange;
+            if (detailedPriceChange) {
+              priceChange =
+                typeof detailedPriceChange === "number"
+                  ? { "24h": detailedPriceChange }
+                  : detailedPriceChange;
+            }
+
+            // Update volume data if available
+            if (detailData?.volumeUSD) {
+              volumeUSD = detailData.volumeUSD;
+            } else if (detailData?.volUsd) {
+              volumeUSD = { "24h": detailData.volUsd };
+            }
           }
         } catch {
-          // Leave fallback as-is when detail fetch fails.
+          // Fallback to existing data if detail fetch fails
         }
       }
 
       return {
+        id: tokenId || symbol.toLowerCase(),
         symbol,
         name: item.name ?? item?.token?.name,
         imageUri: item.imageUri ?? item?.token?.imageUri,
-        mcapUsd: item.mcapUsd,
-        priceUsd: item.priceUsd ?? item?.price?.usd,
-        volume: item.volume,
-        volumeUSD: item.volumeUSD,
-        volUsd: item.volUsd,
+        mcapUsd: item.mcapUsd || 0,
+        priceUsd: item.priceUsd ?? item?.price?.usd ?? 0,
+        volume: item.volume || {},
+        volumeUSD: volumeUSD,
+        volUsd: volumeUSD["24h"] || 0,
         priceChange,
+        // Add default values for required fields
+        change: priceChange["24h"] || 0,
+        volume24h: volumeUSD["24h"] || 0,
       };
     })
   );

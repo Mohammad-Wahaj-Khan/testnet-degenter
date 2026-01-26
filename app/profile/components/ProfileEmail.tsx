@@ -6,7 +6,7 @@ const emailBenefits = [
 
 export default function ProfileEmail() {
   return (
-    <section className="pt-6">
+    <section className="hidden">
       <div className="flex items-start gap-3">
         <span className="mt-1 flex h-5 w-5 items-center justify-center rounded-full border border-neutral-600 text-[10px] font-semibold text-neutral-400">
           -

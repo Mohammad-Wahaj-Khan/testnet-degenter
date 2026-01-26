@@ -1,5 +1,5 @@
 // app/lib/api.ts
-const DEFAULT_BASE_URL = "https://testnet-api.degenter.io";
+const DEFAULT_BASE_URL = "${process.env.NEXT_PUBLIC_API_BASE_URL}";
 const normalizeBaseUrl = (value?: string) => {
   if (!value) return DEFAULT_BASE_URL;
   const trimmed = value.trim();

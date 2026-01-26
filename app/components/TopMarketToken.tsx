@@ -21,7 +21,8 @@ interface Token {
 const FALLBACK_TOKEN_IMAGE = "/zigicon.png";
 const COINMARKETCAP_HOST = "s2.coinmarketcap.com";
 const BUBBLEMAP_API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "https://testnet-api.degenter.io";
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "${process.env.NEXT_PUBLIC_API_BASE_URL}";
 const API_KEY = process.env.NEXT_PUBLIC_X_API_KEY || "";
 
 if (!API_KEY) {

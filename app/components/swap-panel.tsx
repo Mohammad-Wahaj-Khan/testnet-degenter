@@ -349,7 +349,7 @@ export default function SwapPanel({ params }: { params: { token: string } }) {
               //   priceInZigPerToken={token.priceInZigPerToken}
               // />
               <SwapInterface
-                apiBase={API_BASE || "https://testnet-api.degenter.io"}
+                apiBase={API_BASE || "${process.env.NEXT_PUBLIC_API_BASE_URL}"}
                 tokenSymbol={token.symbol} // "HELLO"
                 tokenDenom={token.pairContract} // "coin.zig1... .uzm"  ✅ not the symbol
                 tokenDecimals={token.exponent} // 6

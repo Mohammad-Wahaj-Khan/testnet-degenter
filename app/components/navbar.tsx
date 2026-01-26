@@ -423,18 +423,21 @@ export default function Navbar() {
     const loadProfileImage = async () => {
       try {
         // First, get the user profile by wallet address to get the user_id
-        const profileResponse = await fetch(`${API_BASE}/profiles/by-wallet/${handle}`, {
-          headers: apiKey ? { "x-api-key": apiKey } : undefined,
-        });
-        
+        const profileResponse = await fetch(
+          `${API_BASE}/profiles/by-wallet/${handle}`,
+          {
+            headers: apiKey ? { "x-api-key": apiKey } : undefined,
+          }
+        );
+
         if (!profileResponse.ok) {
           if (isActive) setProfileImageUrl(null);
           return;
         }
-        
+
         const profileData = await profileResponse.json();
         const userId = profileData?.data?.user_id;
-        
+
         if (!userId) {
           if (isActive) setProfileImageUrl(null);
           return;
@@ -444,15 +447,15 @@ export default function Navbar() {
         const response = await fetch(`${API_BASE}/profiles/${userId}`, {
           headers: apiKey ? { "x-api-key": apiKey } : undefined,
         });
-        
+
         if (!response.ok) {
           if (isActive) setProfileImageUrl(null);
           return;
         }
-        
+
         const json = await response.json();
         const imageUrl = json?.data?.image_url ?? json?.image_url ?? null;
-        
+
         if (isActive) {
           setProfileImageUrl(imageUrl);
           // Store the handle in localStorage for guest users
@@ -461,7 +464,7 @@ export default function Navbar() {
           }
         }
       } catch (error) {
-        console.error('Error loading profile:', error);
+        console.error("Error loading profile:", error);
         if (isActive) setProfileImageUrl(null);
       }
     };
@@ -477,26 +480,26 @@ export default function Navbar() {
     <header className=" top-0 z-50 w-full">
       <div className="relative mx-auto w-full max-w-screen-6xl justify-between lg:justify-center px-6 lg:px-6 xl:px-8">
         {/* Single row as 3-column grid for perfect alignment */}
-        <div className="flex justify-between items-center gap-4 sm:gap-3 lg:gap-4 py-3 sm:py-4 md:py-5 lg:py-6">
-          {/* Left group: Logo + Search */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 mr-4 sm:mr-0">
+        <div className="flex justify-between items-center gap-2 sm:gap-3 lg:gap-4 py-2 sm:py-4 md:py-5 lg:py-6 px-2 sm:px-0">
+          {/* Left group: Menu + Logo */}
+          <div className="flex items-center gap-1 sm:gap-3 min-w-0">
             {/* Mobile toggle button */}
             <button
-              className="mobile-menu-button lg:hidden px-2 text-white"
+              className="mobile-menu-button lg:hidden px-1 text-white"
               onClick={() => setMobileMenuOpen(true)}
               aria-label="Open menu"
             >
-              <Menu size={22} />
+              <Menu size={20} />
             </button>
 
             {/* Logo */}
-            <Link href="/" className="select-none shrink-0">
+            <Link href="/" className="select-none shrink-0 ml-1">
               <Image
                 src={LOGO}
                 alt="DEGEN Terminal"
-                width={160}
-                height={32}
-                className="block h-7 xs:h-8 sm:h-9 md:h-10 w-auto"
+                width={130}
+                height={26}
+                className="block h-6 xs:h-7 sm:h-9 md:h-10 w-auto"
                 priority
               />
             </Link>
@@ -525,28 +528,28 @@ export default function Navbar() {
               </nav>
             </div>
 
-            <div className="flex items-center gap-3 sm:gap-2 md:gap-3">
+            <div className="flex items-center gap-2 sm:gap-2 md:gap-3">
               <div className="relative">
                 <button
                   ref={profileButtonRef}
                   onClick={handleProfileClick}
-                  className="flex items-center justify-center rounded-lg text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
-                  aria-label="Portfolio"
+                  className="flex items-center justify-center rounded-lg text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 p-1"
+                  aria-label="Profile"
                   type="button"
                 >
                   {profileImageUrl ? (
                     <img
                       src={profileImageUrl}
                       alt="Profile"
-                      className="h-6 w-6 rounded-full object-cover"
+                      className="h-5 w-5 sm:h-6 sm:w-6 rounded-full object-cover"
                     />
                   ) : (
                     <Image
                       src={ProfileImg}
                       alt="Profile"
-                      width={22}
-                      height={22}
-                      className="w-5 h-5 object-contain select-none"
+                      width={20}
+                      height={20}
+                      className="w-4 h-4 sm:w-5 sm:h-5 object-contain select-none"
                       draggable={false}
                     />
                   )}
@@ -610,7 +613,7 @@ export default function Navbar() {
               </div>
               <span
                 aria-hidden
-                className="mx-2 sm:mx-1 h-6 sm:h-7 w-[1px] bg-white"
+                className="mx-1 sm:mx-1 h-5 sm:h-6 w-[1px] bg-white/50"
               />
               {!address ? (
                 <button
@@ -621,9 +624,9 @@ export default function Navbar() {
                   <Image
                     src={WalletImg}
                     alt="Connect Wallet"
-                    width={22}
-                    height={22}
-                    className="w-5 h-5 object-contain select-none"
+                    width={20}
+                    height={20}
+                    className="w-4 h-4 sm:w-5 sm:h-5 object-contain select-none"
                     draggable={false}
                   />
                 </button>
@@ -637,9 +640,9 @@ export default function Navbar() {
                     title="Click to copy address"
                     className="flex flex-col items-end cursor-pointer"
                   >
-                    <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-[#24242480] border border-[#808080]/20 ">
-                      <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-                      <span className="text-white text-xs sm:text-sm font-medium">
+                    <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-[#24242480] border border-[#808080]/20">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
+                      <span className="text-white text-[10px] sm:text-sm font-medium whitespace-nowrap">
                         {formatAddr(address)}
                       </span>
                     </div>
@@ -649,7 +652,10 @@ export default function Navbar() {
                     className="p-1.5 sm:p-2 rounded-lg  transition-colors"
                     title="Disconnect"
                   >
-                    <X size={16} className="text-gray-300 hover:text-white" />
+                    <X
+                      size={14}
+                      className="text-gray-300 hover:text-white w-3.5 h-3.5"
+                    />
                   </button>
                 </div>
               )}
@@ -841,8 +847,8 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
       icon: FaChartLine,
       title: "Insight",
       subtitle: "Market insights and analytics",
-      href: "/",
-      locked: true,
+      href: "/insights",
+      locked: false,
     },
     // {
     //   icon: FaPlusCircle,

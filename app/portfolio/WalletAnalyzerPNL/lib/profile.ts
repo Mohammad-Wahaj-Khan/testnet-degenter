@@ -21,36 +21,38 @@ export interface ProfileData {
   }>;
 }
 
-export async function fetchProfileByWallet(walletAddress: string): Promise<ProfileData | null> {
+export async function fetchProfileByWallet(
+  walletAddress: string
+): Promise<ProfileData | null> {
   try {
     const response = await fetch(
-      `https://testnet-api.degenter.io/profiles/by-wallet/${walletAddress}`
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/profiles/by-wallet/${walletAddress}`
     );
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
     return data.success ? data.data : null;
   } catch (error) {
-    console.error('Error fetching profile:', error);
+    console.error("Error fetching profile:", error);
     return null;
   }
 }
 
 export function getSocialTagsFromProfile(profile: ProfileData | null) {
   if (!profile?.tags?.length) return [];
-  
+
   const tagMap: Record<string, string> = {
-    'whale': 'Whale',
-    'hacker': 'Hacker',
-    'smart trader': 'Smart Trader',
-    'airdrop': 'Airdrop Farmer'
+    whale: "Whale",
+    hacker: "Hacker",
+    "smart trader": "Smart Trader",
+    airdrop: "Airdrop Farmer",
   };
-  
+
   return profile.tags
-    .map(tag => tag.toLowerCase())
-    .filter(tag => tag in tagMap)
-    .map(tag => tagMap[tag]);
+    .map((tag) => tag.toLowerCase())
+    .filter((tag) => tag in tagMap)
+    .map((tag) => tagMap[tag]);
 }

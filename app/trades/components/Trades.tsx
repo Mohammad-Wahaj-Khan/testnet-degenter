@@ -17,7 +17,8 @@ const Degenter_ICON = "/degen.png";
 const ZIGCHAIN_LABEL = "Oroswap";
 const Degenter_Label = "Degenter";
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "https://testnet-api.degenter.io";
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "${process.env.NEXT_PUBLIC_API_BASE_URL}";
 const API_KEY =
   process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
 const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};

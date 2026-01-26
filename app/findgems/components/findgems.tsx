@@ -190,9 +190,12 @@ const FindGemsMain = () => {
     }
   };
 
-  const formatPriceChange = (change: number | undefined): string => {
-    if (change === undefined) return "0.00%";
-    return `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
+  const formatPriceChange = (change: number | undefined | null): string => {
+    if (change === undefined || change === null || isNaN(Number(change))) {
+      return "0.00%";
+    }
+    const numChange = Number(change);
+    return `${numChange >= 0 ? "+" : ""}${numChange.toFixed(2)}%`;
   };
 
   const renderPriceChange = (timeKey: "1h" | "4h" | "24h", token: Token) => {

@@ -12,6 +12,11 @@ import {
 import BubbleMapPanel from "./BubbleMapPanel";
 import Coin360Panel from "./Coin360Panel";
 import NativeTokenPerformancePanel from "./NativeTokenPerformancePanel";
+import dynamic from "next/dynamic";
+
+const WordCloudPanel = dynamic(() => import("./WordCloudPanel"), {
+  ssr: false,
+});
 
 type Token = {
   symbol: string;
@@ -31,8 +36,8 @@ type InsightsContentProps = {
 
 const InsightsContent: React.FC<InsightsContentProps> = ({ tokens }) => {
   const [activeView, setActiveView] = useState<
-    "bubble" | "coin360" | "native-performance"
-  >("bubble");
+    "bubble" | "coin360" | "native-performance" | "wordcloud"
+  >("wordcloud");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMarketTrendsOpen, setIsMarketTrendsOpen] = useState(true);
   const insightName =
@@ -40,11 +45,13 @@ const InsightsContent: React.FC<InsightsContentProps> = ({ tokens }) => {
       ? "Bubble Map"
       : activeView === "coin360"
       ? "Coin 360"
-      : "Token Performance";
+      : activeView === "native-performance"
+      ? "Token Performance"
+      : "Market Trends";
 
   return (
     <div className="flex flex-1 min-h-0 flex-col px-6">
-      <header className="flex items-center gap-3 px-4 py-3  relative z-20  py-8">
+      <header className="flex items-center gap-3 px-4 py-3  relative z-20">
         <button
           className="text-zinc-400 hover:text-white"
           onClick={() => setIsSidebarOpen((prev) => !prev)}
@@ -98,72 +105,86 @@ const InsightsContent: React.FC<InsightsContentProps> = ({ tokens }) => {
                     <ChevronRight size={14} />
                   )}
                 </button>
-                {isMarketTrendsOpen ? (
-                  <div id="market-trends-list" className="space-y-1">
-                    <button
-                      className={`w-full flex items-center gap-3 p-2 rounded text-left ${
-                        activeView === "bubble"
-                          ? "bg-zinc-900 text-[#39C8A6]"
-                          : "hover:bg-zinc-900 text-zinc-400"
-                      }`}
-                      onClick={() => setActiveView("bubble")}
-                    >
-                      <div
-                        className={`w-1 h-4 rounded-full ${
+                {isMarketTrendsOpen && (
+                  <ul id="market-trends-list" className="space-y-1 pl-4">
+                    <li>
+                      <button
+                        className={`w-full text-left px-3 py-1.5 rounded ${
+                          activeView === "wordcloud"
+                            ? "bg-zinc-800 text-orange-400"
+                            : "text-zinc-400 hover:bg-zinc-800"
+                        }`}
+                        onClick={() => setActiveView("wordcloud")}
+                      >
+                        Market Trends
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        className={`w-full text-left px-3 py-1.5 rounded ${
                           activeView === "bubble"
-                            ? "bg-[#39C8A6]"
-                            : "bg-zinc-700"
+                            ? "bg-zinc-800 text-orange-400"
+                            : "text-zinc-400 hover:bg-zinc-800"
                         }`}
-                      />
-                      Bubble map
-                    </button>
-                    <button
-                      className={`w-full flex items-center gap-3 p-2 rounded text-left ${
-                        activeView === "coin360"
-                          ? "bg-zinc-900 text-[#FA4E30]"
-                          : "hover:bg-zinc-900 text-zinc-400"
-                      }`}
-                      onClick={() => setActiveView("coin360")}
-                    >
-                      <div
-                        className={`w-1 h-4 rounded-full ${
-                          activeView === "coin360"
-                            ? "bg-[#FA4E30]"
-                            : "bg-zinc-700"
-                        }`}
-                      />
-                      Coin 360
-                    </button>
-                    <button
-                      className={`w-full flex items-center gap-3 p-2 rounded text-left ${
-                        activeView === "native-performance"
-                          ? "bg-zinc-900 text-[#51179cff]"
-                          : "hover:bg-zinc-900 text-zinc-400"
-                      }`}
-                      onClick={() => setActiveView("native-performance")}
-                    >
-                      <div
-                        className={`w-1 h-4 rounded-full ${
-                          activeView === "native-performance"
-                            ? "bg-[#51179cff]"
-                            : "bg-zinc-700"
-                        }`}
-                      />
-                      Token performances
-                    </button>
-                  </div>
-                ) : null}
+                        onClick={() => setActiveView("bubble")}
+                      >
+                        Bubble Map
+                      </button>
+                    </li>
+                    <li>
+                      <div className="relative">
+                        <button
+                          className={`w-full text-left px-3 py-1.5 rounded ${
+                            activeView === "coin360"
+                              ? "bg-zinc-800 text-orange-400/50"
+                              : "text-zinc-400/50 hover:bg-zinc-800/50"
+                          } opacity-50 cursor-not-allowed`}
+                          disabled
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          Coin 360
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] bg-zinc-700/80 text-zinc-400 px-2 py-0.5 rounded">
+                            Coming Soon
+                          </span>
+                        </button>
+                      </div>
+                    </li>
+                    <li>
+                      <div className="relative">
+                        <button
+                          className={`w-full text-left px-3 py-1.5 rounded ${
+                            activeView === "native-performance"
+                              ? "bg-zinc-800 text-orange-400/50"
+                              : "text-zinc-400/50 hover:bg-zinc-800/50"
+                          } opacity-50 cursor-not-allowed`}
+                          disabled
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          Token Performance
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] bg-zinc-700/80 text-zinc-400 px-2 py-0.5 rounded">
+                            Coming Soon
+                          </span>
+                        </button>
+                      </div>
+                    </li>
+                  </ul>
+                )}
               </div>
             </nav>
-        </div>
+          </div>
         </aside>
 
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {activeView === "bubble" ? (
-            <BubbleMapPanel data={tokens} />
-          ) : activeView === "coin360" ? (
-            <Coin360Panel data={tokens} />
-          ) : (
+        <main className="flex-1 overflow-auto p-6">
+          {activeView === "wordcloud" && <WordCloudPanel />}
+          {activeView === "bubble" && <BubbleMapPanel data={tokens} />}
+          {activeView === "coin360" && <Coin360Panel data={tokens} />}
+          {activeView === "native-performance" && (
             <NativeTokenPerformancePanel data={tokens} />
           )}
         </main>

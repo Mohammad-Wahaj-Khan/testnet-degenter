@@ -2,6 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion"; // High-level animations
+import {
+  Wallet,
+  UserPlus,
+  Edit3,
+  Loader2,
+  LayoutGrid,
+  Zap,
+  ArrowRight,
+} from "lucide-react";
 import ProfileSidebar from "./components/ProfileSidebar";
 import ProfileHeader from "./components/ProfileHeader";
 import ProfileWallets from "./components/ProfileWallets";
@@ -33,15 +43,7 @@ const defaultProfile: Profile = {
   twitter: "@myhandle",
   telegram: "https://t.me/myhandle",
   tags: ["defi", "memes"],
-  wallets: [
-    {
-      address: "3hXNpgKLFQ",
-      label: "main",
-      is_primary: true,
-      network: "Solana",
-      updated_at: "2026-01-16T15:06:50Z",
-    },
-  ],
+  wallets: [],
 };
 
 export default function ProfilePage() {
@@ -58,6 +60,15 @@ export default function ProfilePage() {
   const { address, openView, isWalletConnected } = useChain(
     (CHAIN_NAME as string) || "zigchain-1"
   );
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { y: 0, opacity: 1 },
+  };
   const [profile, setProfile] = useState<Profile>(defaultProfile);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -97,94 +108,76 @@ export default function ProfilePage() {
     }
   };
 
-  // Handle wallet connection and profile check
+  // Handle wallet connection and profile check with caching
   useEffect(() => {
-    const checkWalletProfile = async () => {
-      if (!address || !apiKey) return;
+    // Skip if no address or API key, or if address hasn't changed
+    if (!address || !apiKey || address === lastWalletAddress) return;
 
+    // Update the last wallet address to prevent duplicate calls
+    setLastWalletAddress(address);
+    
+    const loadProfile = async () => {
       try {
-        // console.log("Checking profile for wallet:", address);
         setIsLoading(true);
-
-        try {
-          // First try to get the profile by wallet
-          const walletProfile = await getProfileByWallet(address, apiKey);
-          // console.log("Found existing profile:", walletProfile);
-
-          // Check if this is a valid profile (has a handle and user_id)
-          if (walletProfile?.handle && walletProfile?.user_id) {
-            setProfile(walletProfile);
-            setHasProfile(true);
-            setIsModalOpen(false);
-          } else {
-            // If we get a profile but it's not valid, treat as no profile
-            throw new Error("No valid profile found");
+        
+        // Check if we have a cached profile for this address
+        const cacheKey = `profile_${address}`;
+        const cachedProfile = sessionStorage.getItem(cacheKey);
+        
+        if (cachedProfile) {
+          const parsedProfile = JSON.parse(cachedProfile);
+          // Only use cache if it's less than 5 minutes old
+          if (Date.now() - parsedProfile.timestamp < 5 * 60 * 1000) {
+            setProfile(parsedProfile.data);
+            setHasProfile(!!parsedProfile.data?.handle);
+            setIsModalOpen(!parsedProfile.data?.handle);
+            return;
           }
-        } catch (error) {
-          // If we get a 404 or any other error, treat as no profile
-          // console.log(
-          //   "No profile found for wallet, showing create profile modal"
-          // );
+        }
+
+        // No valid cache, fetch fresh data
+        const walletProfile = await getProfileByWallet(address, apiKey);
+        
+        // Cache the profile data
+        if (walletProfile) {
+          const profileToCache = {
+            data: walletProfile,
+            timestamp: Date.now()
+          };
+          sessionStorage.setItem(cacheKey, JSON.stringify(profileToCache));
+        }
+
+        if (walletProfile?.handle && walletProfile?.user_id) {
+          setProfile(walletProfile);
+          setHasProfile(true);
+          setIsModalOpen(false);
+        } else {
           setHasProfile(false);
           setProfile({
             ...defaultProfile,
-            wallets: [
-              {
-                address,
-                label: "Main Wallet",
-                is_primary: true,
-                network: "Zigchain",
-              },
-            ],
+            wallets: [{
+              address,
+              label: "Main Wallet",
+              is_primary: true,
+              network: "Zigchain",
+            }],
           });
           setIsModalOpen(true);
         }
       } catch (error) {
-        console.error("Error in wallet profile check:", error);
-        setError("Failed to check wallet profile");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (isWalletConnected && address) {
-      // console.log("Wallet connected, checking profile...");
-      checkWalletProfile();
-    } else {
-      // console.log("Wallet not connected or no address");
-    }
-  }, [address, isWalletConnected, apiKey]);
-
-  // Load profile when handle or userId changes
-  useEffect(() => {
-    // Only reload if wallet address has actually changed
-    if (address === lastWalletAddress) return;
-
-    setLastWalletAddress(address);
-
-    // Force a reload of the profile data
-    const loadProfile = async () => {
-      if (!address) return;
-
-      try {
-        setIsLoading(true);
-        const profileData = await getProfileByWallet(address, apiKey);
-        if (profileData?.handle) {
-          setProfile(profileData);
-          setHasProfile(true);
-        } else {
-          setHasProfile(false);
-        }
-      } catch (error) {
-        console.error("Failed to load profile:", error);
+        console.error("Error loading profile:", error);
+        setError("Failed to load profile");
         setHasProfile(false);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadProfile();
-  }, [address, lastWalletAddress, apiKey]);
+    // Only load if wallet is connected
+    if (isWalletConnected) {
+      loadProfile();
+    }
+  }, [address, apiKey, isWalletConnected]);
 
   // Initial load and guest wallet handling
   useEffect(() => {
@@ -223,12 +216,12 @@ export default function ProfilePage() {
         if (profile.handle && profile.user_id) {
           return;
         }
-        
+
         if (!userId && !handle && !address && !guestWalletId) {
           setIsLoading(false);
           return;
         }
-        
+
         setIsLoading(true);
         const effectiveHandle = handle || address || guestWalletId;
         const data = userId
@@ -367,6 +360,12 @@ export default function ProfilePage() {
   };
 
   return (
+    // <main className="flex min-h-screen flex-col bg-[#050505] relative overflow-hidden font-sans">
+    //   <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+    //     <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-500/10 blur-[120px] animate-pulse" />
+    //     <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-orange-600/5 blur-[120px]" />
+    //     <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.03] bg-repeat" />
+    //   </div>
     <main className="flex min-h-screen flex-col bg-black relative overflow-hidden p-0 md:px-4">
       <div
         className="absolute inset-0 z-1 h-60"
@@ -391,77 +390,161 @@ export default function ProfilePage() {
         <Navbar />
         <TopMarketToken />
       </div>
-      <div className="grid relative z-10 min-h-screen grid-cols-1 pt-20 px-6 md:grid-cols-[260px,1fr]">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="grid relative z-10 min-h-screen grid-cols-1 pt-12 px-6 md:grid-cols-[280px,1fr]"
+      >
         <ProfileSidebar />
-        <section className="px-6 py-6 md:px-10">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-neutral-400">Overview</p>
+
+        <section className="px-4 py-6 md:px-12">
+          {/* Header Action Bar */}
+          <motion.div
+            variants={itemVariants}
+            className="flex items-center justify-between mb-8"
+          >
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+              <p className="text-md font-black uppercase tracking-[0.3em] text-white">
+                Profile Overview
+              </p>
+            </div>
+
             <div className="flex items-center gap-3">
               {!isWalletConnected ? (
                 <button
-                  type="button"
                   onClick={() => openView()}
-                  className="rounded-sm bg-green-500 px-4 py-2 text-sm font-semibold text-white hover:bg-green-600"
+                  className="group hidden relative  items-center gap-2 overflow-hidden rounded-xl px-5 py-2.5 text-xs font-black uppercase text-white transition-all hover:scale-105 active:scale-95"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%)",
+                    boxShadow: "0 0 15px rgba(99, 102, 241, 0.5)",
+                  }}
                 >
-                  Connect Wallet
+                  <span className="relative z-10 flex items-center gap-2">
+                    <Wallet size={14} /> Connect
+                  </span>
+                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                 </button>
               ) : !hasProfile ? (
                 <button
-                  type="button"
                   onClick={() => setIsModalOpen(true)}
-                  className="rounded-sm bg-green-500 px-4 py-2 text-sm font-semibold text-white hover:bg-green-600"
+                  className="group relative flex items-center gap-2 overflow-hidden rounded-xl px-5 py-2.5 text-xs font-black uppercase text-white transition-all hover:scale-105 active:scale-95"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #10B981 0%, #3B82F6 50%, #8B5CF6 100%)",
+                    boxShadow: "0 0 15px rgba(16, 185, 129, 0.4)",
+                  }}
                 >
-                  Create Profile
+                  <span className="relative z-10 flex items-center gap-2">
+                    <UserPlus size={14} /> Initialize Identity
+                  </span>
+                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                 </button>
               ) : (
                 <button
-                  type="button"
                   onClick={() => setIsModalOpen(true)}
-                  className="rounded-sm border border-green-500 px-4 py-2 text-xs font-semibold uppercase text-green-500 transition hover:bg-green-500 hover:text-black"
+                  className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-r from-white/5 to-white/[0.03] px-5 py-2.5 text-xs font-bold uppercase text-white transition-all hover:border-white/20 hover:shadow-[0_0_15px_rgba(99,102,241,0.3)]"
                 >
-                  Edit Profile
+                  <span className="relative z-10 flex items-center gap-2">
+                    <Edit3 size={14} /> Edit Identity
+                  </span>
+                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                 </button>
               )}
             </div>
-          </div>
-          {isWalletConnected ? (
-            <ProfileHeader
-              profile={profile}
-              onUpgrade={handleUpgrade}
-              isSaving={isSaving}
-              onImageUpdate={handleImageUpdate}
-              apiKey={apiKey || ""}
-            />
-          ) : (
-            <div className="mt-8 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6 text-center">
-              <h3 className="mb-2 text-lg font-semibold text-white">
-                Wallet Not Connected
-              </h3>
-              <p className="mb-4 text-sm text-neutral-400">
-                Connect your wallet to view or create your profile
-              </p>
-              <button
-                type="button"
-                onClick={() => openView()}
-                className="rounded-sm bg-green-500 px-6 py-2 text-sm font-semibold text-white hover:bg-green-600"
+          </motion.div>
+
+          {/* Main Content Area */}
+          <AnimatePresence mode="wait">
+            {isWalletConnected ? (
+              <motion.div
+                key="profile-content"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8"
               >
-                Connect Wallet
-              </button>
+                <ProfileHeader
+                  profile={profile}
+                  onUpgrade={handleUpgrade}
+                  isSaving={isSaving}
+                  onImageUpdate={handleImageUpdate}
+                  apiKey={apiKey || ""}
+                />
+
+                <div className="grid grid-cols-1 gap-6">
+                  <ProfileWallets
+                    wallets={profile.wallets ?? []}
+                    onLinkWallet={() => openView?.()}
+                  />
+                  <ProfileEmail />
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="empty-state"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center justify-center rounded-3xl border border-white/[0.05] bg-white/[0.02] py-20 text-center backdrop-blur-sm"
+              >
+                <div className="mb-6 rounded-full bg-neutral-900 p-6 text-neutral-700">
+                  <Zap size={48} strokeWidth={1} />
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-2">
+                  Terminal Locked
+                </h3>
+                <p className="max-w-xs text-neutral-500 text-sm mb-8">
+                  Establish a secure wallet link to access your on-chain agent
+                  profile.
+                </p>
+                <motion.button
+                  onClick={() => openView()}
+                  className="group relative flex items-center justify-center min-w-[180px] overflow-hidden rounded-xl px-8 py-3.5 text-xs font-black uppercase tracking-widest text-white transition-all disabled:opacity-50"
+                  style={{ background: "#0D0D0D" }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <div className="absolute inset-0 z-0">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{
+                        duration: 4,
+                        repeat: Infinity,
+                        ease: "linear",
+                      }}
+                      className="absolute inset-[-200%] opacity-40 group-hover:opacity-100 transition-opacity"
+                      style={{
+                        background:
+                          "conic-gradient(from 0deg, transparent 0%, #10B981 25%, #3B82F6 50%, #8B5CF6 75%, transparent 100%)",
+                      }}
+                    />
+                  </div>
+                  <div className="absolute inset-[1.5px] z-10 rounded-[11px] bg-[#0D0D0D] group-hover:bg-neutral-900 transition-colors" />
+                  <span className="relative z-20 flex items-center gap-2">
+                    <span>Link Wallet Now</span>
+                    <ArrowRight size={16} />
+                  </span>
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {isLoading && (
+            <div className="mt-8 flex items-center gap-3 text-neutral-500">
+              <Loader2 size={16} className="animate-spin text-emerald-500" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                Retrieving Encrypted Data...
+              </span>
             </div>
           )}
-          {isLoading && (
-            <p className="mt-4 text-xs text-neutral-500">Loading profile...</p>
+          {error && (
+            <p className="mt-4 text-xs font-medium text-red-500/80">{error}</p>
           )}
-          {error && <p className="mt-4 text-xs text-red-400">{error}</p>}
-          <div className="mt-6 space-y-6">
-            <ProfileWallets
-              wallets={profile.wallets ?? []}
-              onLinkWallet={() => openView?.()}
-            />
-            <ProfileEmail />
-          </div>
         </section>
-      </div>
+      </motion.div>
+
       <CreateProfileModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

@@ -19,7 +19,7 @@ export type Profile = {
   wallets?: ProfileWallet[];
 };
 
-const DEFAULT_BASE_URL = "https://testnet-api.degenter.io";
+const DEFAULT_BASE_URL = "${process.env.NEXT_PUBLIC_API_BASE_URL}";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_BASE_URL;
 
 const buildHeaders = (apiKey?: string) => {
@@ -176,18 +176,15 @@ export async function uploadProfileImage(
   // Set key to 'file' to match your Postman screenshot
   formData.append("file", file);
 
-  const response = await fetch(
-    `${API_BASE}/profiles/${userId}/avatar`,
-    {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey, // This must be the actual dynamic API key/token
-        // NOTE: Do not set Content-Type header here;
-        // the browser will set it automatically for FormData.
-      },
-      body: formData,
-    }
-  );
+  const response = await fetch(`${API_BASE}/profiles/${userId}/avatar`, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey, // This must be the actual dynamic API key/token
+      // NOTE: Do not set Content-Type header here;
+      // the browser will set it automatically for FormData.
+    },
+    body: formData,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
