@@ -16,8 +16,7 @@ import type { ProfileWallet } from "../lib/profile-api";
 import { formatDateTime, truncateMiddle } from "../lib/profile-format";
 
 // --- The Ultra-Premium Button Component ---
-const UltimateButton = ({ onClick, disabled, children }: any) => {
-  const [isHovered, setIsHovered] = useState(false);
+export const UltimateButton = ({ onClick, disabled, children }: any) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   
   // Mouse tracking for the "Glow" effect
@@ -36,8 +35,6 @@ const UltimateButton = ({ onClick, disabled, children }: any) => {
       onClick={onClick}
       disabled={disabled}
       onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className="group relative flex items-center gap-2 overflow-hidden rounded-xl px-7 py-3.5 text-sm font-bold text-white transition-all disabled:opacity-50"
       style={{
         background: "#0a0a0a", // Dark base for contrast
@@ -58,11 +55,11 @@ const UltimateButton = ({ onClick, disabled, children }: any) => {
       </div>
 
       {/* 2. Inner Content Background */}
-      <div className="absolute inset-[1.5px] z-10 rounded-[11px] bg-neutral-950/90 group-hover:bg-neutral-900/80 transition-colors" />
+      <div className="absolute inset-[1.5px] z-10 rounded-[11px] bg-neutral-900/80 transition-colors" />
 
       {/* 3. Interactive Radial Glow (Follows Mouse) */}
       <motion.div
-        className="absolute inset-0 z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        className="absolute inset-0 z-20 pointer-events-none opacity-100 transition-opacity duration-500"
         style={{
           background: useTransform(
             [mouseX, mouseY],
@@ -73,7 +70,7 @@ const UltimateButton = ({ onClick, disabled, children }: any) => {
 
       {/* 4. Stardust Particle Layer */}
       <AnimatePresence>
-        {isHovered && (
+        {true && (
           <div className="absolute inset-0 z-20">
             {[...Array(6)].map((_, i) => (
               <motion.span
@@ -164,10 +161,10 @@ export default function ProfileWallets({
         </div>
 
         {/* --- Using the Ultimate Button here --- */}
-        <UltimateButton onClick={onLinkWallet} disabled={!onLinkWallet}>
+        {/* <UltimateButton onClick={onLinkWallet} disabled={!onLinkWallet}>
           <Plus size={18} className="transition-transform group-hover:rotate-90" />
           Link New Wallet
-        </UltimateButton>
+        </UltimateButton> */}
       </div>
 
       <div className="grid gap-3">
@@ -183,7 +180,17 @@ export default function ProfileWallets({
                 transition={{ delay: index * 0.05 }}
                 className="group relative flex flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4 transition-colors hover:border-neutral-700 hover:bg-neutral-900/60 md:flex-row md:items-center"
               >
-                <div className="relative h-12 w-12 shrink-0">
+                <div className="relative h-12 w-12 shrink-0 group">
+                  <a 
+                    href={`/portfolio?address=${wallet.address}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-blue-500/30"
+                    aria-label="View portfolio"
+                    title="View Portfolio"
+                  >
+                    <ExternalLink size={12} />
+                  </a>
                   <img
                     src={`https://avatar.vercel.sh/${wallet.address}.svg`}
                     alt="Wallet Avatar"
@@ -205,11 +212,13 @@ export default function ProfileWallets({
                 </div>
 
                 <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-medium text-blue-400">
-                      {truncateMiddle(wallet.address, 8, 6)}
-                    </span>
-                    <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-bold uppercase text-neutral-500">
+                  <div className="flex items-start gap-2 w-full">
+                    <div className="min-w-0">
+                      <div className="font-mono text-sm font-medium text-blue-400 break-all">
+                        {wallet.address}
+                      </div>
+                    </div>
+                    <span className="flex-shrink-0 rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-bold uppercase text-neutral-500">
                       {wallet.network || "Solana"}
                     </span>
                   </div>

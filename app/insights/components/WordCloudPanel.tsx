@@ -106,7 +106,11 @@ const WordCloudPanel = () => {
             symbol: token.symbol,
             name: token.name,
             price: token.priceUsd,
-            priceChange24h: token.priceChange24h || 0,
+            priceChange24h:
+              token.priceChange24h !== undefined &&
+              token.priceChange24h !== null
+                ? token.priceChange24h
+                : 0,
             marketCap: token.mcapUsd,
             volume24h: token.volUsd,
             position: {
@@ -128,17 +132,46 @@ const WordCloudPanel = () => {
     return result;
   }, []);
 
+  const fetchTokenData = async (symbol: string) => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/tokens/${symbol.toLowerCase()}`
+      );
+      const data = await response.json();
+      return data.success ? data.data : null;
+    } catch (error) {
+      console.error(`Error fetching data for ${symbol}:`, error);
+      return null;
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // First, fetch the list of tokens
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/tokens`
         );
         const data = await response.json();
+
         if (data.success) {
-          setTokens(
-            generateLayout(data.data.filter((t: any) => t.mcapUsd > 0))
+          // Filter tokens with positive market cap
+          const filteredTokens = data.data.filter((t: any) => t.mcapUsd > 0);
+
+          // Fetch detailed data for each token to get 24h change
+          const tokensWithDetails = await Promise.all(
+            filteredTokens.map(async (token: any) => {
+              const details = await fetchTokenData(token.symbol);
+              return {
+                ...token,
+                priceChange24h: details?.priceChange?.["24h"] || 0,
+                price: details?.priceInUsd || token.priceUsd || 0,
+                volume24h: details?.volumeUSD?.["24h"] || 0,
+              };
+            })
           );
+
+          setTokens(generateLayout(tokensWithDetails));
         }
       } catch (err) {
         console.error(err);

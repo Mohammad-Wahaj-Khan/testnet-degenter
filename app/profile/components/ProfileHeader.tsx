@@ -3,19 +3,25 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Camera,
-  Loader2,
   BadgeCheck,
   Sparkles,
-  ChevronRight,
-  ShieldCheck,
   Zap,
-  Lock as FiLock,
-  User,
+  TrendingUp,
+  Calendar,
+  Plus,
 } from "lucide-react";
-import Image from "next/image";
 import { truncateMiddle } from "../lib/profile-format";
 import type { Profile } from "../lib/profile-api";
 import { uploadProfileImage } from "../lib/profile-api";
+import dynamic from "next/dynamic";
+import { UltimateButton } from "./ProfileWallets";
+
+const WalletValueChart = dynamic(() => import("./WalletValueChart"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-white/5 rounded-xl animate-pulse" />
+  ),
+});
 
 type ProfileHeaderProps = {
   profile: Profile;
@@ -36,9 +42,7 @@ export default function ProfileHeader({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
 
-  // Reset image state when profile changes
   useEffect(() => {
     setImageLoaded(false);
     setImageError(false);
@@ -49,12 +53,6 @@ export default function ProfileHeader({
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !profile.user_id) return;
-
-    if (file.type === "image/svg+xml") {
-      alert("SVG files are not supported.");
-      return;
-    }
-
     try {
       setIsUploading(true);
       const result = await uploadProfileImage(profile.user_id, file, apiKey);
@@ -63,157 +61,193 @@ export default function ProfileHeader({
       console.error("Error:", error);
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleValue = profile.handle || profile.wallets?.[0]?.address || "3hXNpgKLFqCXB79h";
-  const displayHandle = truncateMiddle(handleValue, 6, 6);
-  const displayName = profile.display_name || profile.handle || displayHandle || "Degen User";
+  const walletAddress = profile.wallets?.[0]?.address || "";
+  const displayName = profile.display_name || profile.handle || "Degen User";
+  const creationDate = new Date(profile?.created_at).toLocaleDateString(
+    "en-US",
+    { month: "short", year: "numeric" }
+  );
 
   return (
     <section className="relative group overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0A0A0A] p-1 shadow-2xl">
-      {/* High-Level Ambient Glows */}
+      {/* Background Glow */}
       <div className="absolute -right-10 -top-10 h-64 w-64 rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none" />
-      <div className="absolute -left-10 -bottom-10 h-64 w-64 rounded-full bg-blue-500/5 blur-[120px] pointer-events-none" />
 
-      {/* Glass Inner Container */}
-      <div className="relative rounded-[22px] bg-gradient-to-b from-white/[0.03] to-transparent p-6 md:p-10">
-        <div className="flex flex-col gap-8 md:flex-row md:items-center">
-          
-          {/* Avatar Section: Custom Hex/Octagon Style Border */}
-          <div className="relative group/avatar self-center md:self-start">
-            <div
-              className={`relative h-40 w-40 overflow-hidden rounded-[2.5rem] p-[2px] bg-gradient-to-tr from-emerald-500/40 via-white/10 to-blue-500/40 transition-all duration-500 group-hover/avatar:rounded-3xl cursor-pointer ${
-                isUploading ? "animate-pulse" : ""
-              }`}
-              onClick={handleImageClick}
-            >
-              <div className="h-full w-full rounded-[2.4rem] overflow-hidden bg-[#0D0D0D] transition-all group-hover/avatar:rounded-[1.4rem]">
-                {profile.image_url && !imageError ? (
-                  <>
-                    {!imageLoaded && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-[#111]">
-                        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-                      </div>
-                    )}
+      <div className="relative rounded-[22px] bg-gradient-to-b from-white/[0.03] to-transparent p-6 md:p-8">
+        {/* TOP ROW: Avatar + Chart + Value */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          {/* 1. Avatar (3 cols) */}
+          <div className="lg:col-span-2 flex justify-center lg:justify-start">
+            <div className="relative group/avatar">
+              <div
+                className={`relative h-32 w-32 overflow-hidden rounded-[2.5rem] p-[2px] bg-gradient-to-tr from-emerald-500/40 via-white/10 to-blue-500/40 transition-all cursor-pointer ${
+                  isUploading ? "animate-pulse" : "hover:scale-105"
+                }`}
+                onClick={handleImageClick}
+              >
+                <div className="h-full w-full rounded-[2.4rem] overflow-hidden bg-[#0D0D0D]">
+                  {profile.image_url && !imageError ? (
                     <img
-                      ref={imageRef}
                       src={profile.image_url}
                       alt={displayName}
-                      className={`h-full w-full object-cover transition-transform duration-700 group-hover/avatar:scale-110 ${
-                        imageLoaded ? 'opacity-100' : 'opacity-0'
+                      className={`h-full w-full object-cover transition-opacity duration-500 ${
+                        imageLoaded ? "opacity-100" : "opacity-0"
                       }`}
                       onLoad={() => setImageLoaded(true)}
                       onError={() => setImageError(true)}
-                      loading="lazy"
-                      decoding="async"
                     />
-                  </>
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-[#111]">
-                    {imageError ? (
-                      <User className="h-16 w-16 text-white/30" />
-                    ) : (
-                      <Camera className="text-white/20" size={40} />
-                    )}
-                  </div>
-                )}
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-[#111]">
+                      <Camera className="text-white/20" size={32} />
+                    </div>
+                  )}
+                </div>
+                {/* Upload Overlay */}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover/avatar:opacity-100 transition-opacity rounded-[2.4rem]">
+                  <Zap className="text-emerald-400" size={24} />
+                </div>
               </div>
-
-              {/* Advanced UI Overlay */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-500/80 backdrop-blur-sm opacity-0 transition-all duration-300 group-hover/avatar:opacity-100">
-                {isUploading ? (
-                  <Loader2 className="animate-spin text-black" size={32} />
-                ) : (
-                  <>
-                    <Zap className="mb-2 text-black fill-black" size={24} />
-                    <span className="text-xs font-black uppercase tracking-[0.2em] text-black">Update</span>
-                  </>
-                )}
+              <div className="absolute -bottom-1 -right-1 h-8 w-8 flex items-center justify-center rounded-xl border-2 border-[#0A0A0A] bg-emerald-500 text-black shadow-lg">
+                <BadgeCheck size={16} strokeWidth={3} />
               </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                accept="image/*"
+                className="hidden"
+              />
             </div>
-
-            {/* Verified Badge with Pulse */}
-            <div className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-2xl border-4 border-[#0A0A0A] bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.5)]">
-              <BadgeCheck size={22} strokeWidth={2.5} />
-            </div>
-
-            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" disabled={isUploading} />
           </div>
 
-          {/* Info Section */}
-          <div className="flex-1 space-y-6">
-            <div className="space-y-3 text-center md:text-left">
-              <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
-                <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/60">
+          {/* 2. Chart (6 cols) */}
+          <div className="lg:col-span-7 w-full h-[140px] bg-white/[0.02] rounded-2xl border border-white/5 p-2 overflow-hidden relative">
+            <div className="absolute top-2 left-4 z-10">
+              {/* <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500/80 uppercase tracking-wider">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Performance
+                </span> */}
+            </div>
+            {walletAddress ? (
+              <WalletValueChart walletAddress={walletAddress} />
+            ) : (
+              <div className="h-full flex items-center justify-center text-zinc-600 text-xs italic">
+                Analytics Unavailable
+              </div>
+            )}
+          </div>
+
+          {/* 3. High Level Stats - Locked (3 cols) */}
+          <div className="lg:col-span-3 flex items-center justify-center border-l border-white/5 lg:pl-8">
+            <div className="text-center p-4">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-emerald-400"
+                >
+                  <rect
+                    x="3"
+                    y="11"
+                    width="18"
+                    height="11"
+                    rx="2"
+                    ry="2"
+                  ></rect>
+                  <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-white/90">
+                Upgrade to PRO
+              </p>
+              <p className="text-xs text-white/60 mt-1">
+                Unlock portfolio analytics
+              </p>
+              <button
+                // onClick={onUpgrade}
+                className="mt-3 px-4 py-1.5 bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold rounded-lg transition-colors hover:bg-emerald-500/30"
+              >
+                Upgrade Now
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* BOTTOM ROW: Profile Details */}
+        <div className="mt-8 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-start gap-6">
+          <div className="space-y-4 max-w-2xl">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-white">
                   {displayName}
                 </h1>
                 {isSaving && (
-                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1">
-                    <div className="h-1.5 w-1.5 animate-ping rounded-full bg-emerald-500" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Syncing</span>
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                    <span className="text-[9px] font-black text-emerald-500 uppercase">
+                      Syncing
+                    </span>
                   </div>
                 )}
               </div>
-              
-              <div className="flex items-center justify-center md:justify-start gap-3">
-                 <span className="px-3 py-1 rounded-md bg-white/5 border border-white/10 text-xs font-mono text-emerald-400">
-                   {displayHandle}
-                 </span>
-              </div>
-
-              {profile.bio && (
-                <p className="mx-auto max-w-lg text-base leading-relaxed text-zinc-400 md:mx-0 font-medium">
-                  {profile.bio}
-                </p>
-              )}
-            </div>
-
-            {/* Stats / Actions Bar */}
-            <div className="flex flex-wrap items-center justify-center gap-6 border-t border-white/5 pt-8 md:justify-start">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">Identity Tier</span>
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-6 px-2 items-center gap-1.5 rounded bg-emerald-500 text-black text-[11px] font-black">
-                    <ShieldCheck size={14} />
-                    ELITE AGENT
-                  </div>
-                </div>
-              </div>
-
-              <div className="h-10 w-[1px] bg-white/5 hidden md:block" />
-
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="relative">
-                  <button
-                    type="button"
-                    disabled
-                    className="group flex items-center gap-2 rounded-xl border border-white/5 bg-white/5 px-4 py-3 text-xs font-bold text-white/40 transition-all opacity-50 cursor-not-allowed"
-                  >
-                    <Sparkles size={14} className="opacity-50" />
-                    Upgrade to Pro
-                    <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500">
-                      <FiLock size={10} className="text-black" />
-                    </span>
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    disabled
-                    className="group flex items-center gap-2 rounded-xl border border-white/5 bg-white/5 px-4 py-3 text-xs font-bold text-white/40 transition-all opacity-50 cursor-not-allowed"
-                  >
-                    View Perks
-                    <ChevronRight size={14} className="opacity-50" />
-                    <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500">
-                      <FiLock size={10} className="text-black" />
-                    </span>
-                  </button>
-                </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-mono text-emerald-400 bg-emerald-400/5 px-2 py-0.5 rounded border border-emerald-400/10">
+                  @{profile.handle || truncateMiddle(walletAddress, 6, 4)}
+                </span>
+                {/* <div className="flex items-center gap-1 text-zinc-500 text-xs font-medium">
+                  <Calendar size={12} />
+                  Joined {creationDate}
+                </div> */}
               </div>
             </div>
+
+            {profile.bio && (
+              <p className="text-zinc-400 text-sm md:text-base leading-relaxed font-medium italic">
+                "{profile.bio}"
+              </p>
+            )}
+
+            {/* Tags */}
+            <div className="flex flex-wrap gap-2">
+              {profile.tags?.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-tighter text-zinc-300 hover:bg-white/10 transition-colors cursor-default"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <div className="flex shrink-0">
+            {/* <button
+                type="button"
+                onClick={onUpgrade}
+                className="group relative flex items-center gap-2 rounded-2xl bg-white text-black px-6 py-3 text-sm font-black hover:bg-emerald-400 transition-all active:scale-95 overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+                <Sparkles size={16} />
+                UPGRADE PRO
+              </button> */}
+            <UltimateButton onClick={onUpgrade} disabled={isSaving}>
+              <Plus
+                size={18}
+                className="transition-transform group-hover:rotate-90"
+              />
+              Update Profile
+            </UltimateButton>
           </div>
         </div>
       </div>

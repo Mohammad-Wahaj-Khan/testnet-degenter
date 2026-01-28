@@ -7,6 +7,7 @@ export type ProfileWallet = {
 };
 
 export type Profile = {
+  created_at: string | number | Date;
   handle: string;
   user_id?: number;
   display_name?: string;
@@ -47,8 +48,7 @@ const normalizeWallet = (wallet: any): ProfileWallet => ({
 });
 
 const normalizeProfile = (payload: any, fallbackHandle: string): Profile => ({
-  handle:
-    payload?.handle ?? payload?.id ?? payload?.user_id ?? fallbackHandle ?? "",
+  handle: payload?.handle ?? payload?.id ?? payload?.user_id ?? fallbackHandle ?? "",
   user_id: payload?.user_id ?? payload?.id ?? undefined,
   display_name: payload?.display_name ?? payload?.displayName ?? "",
   bio: payload?.bio ?? "",
@@ -60,6 +60,7 @@ const normalizeProfile = (payload: any, fallbackHandle: string): Profile => ({
   wallets: Array.isArray(payload?.wallets)
     ? payload.wallets.map(normalizeWallet)
     : [],
+  created_at: ""
 });
 export async function getProfile(
   handle: string,

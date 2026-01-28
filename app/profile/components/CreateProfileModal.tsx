@@ -145,14 +145,14 @@ export default function CreateProfileModal({
     if (file.type === "image/svg+xml") return alert("SVG not supported");
 
     const reader = new FileReader();
-    reader.onload = () => { if (typeof reader.result === "string") setFormData(prev => ({ ...prev, imageUrl: reader.result as string })); };
+    reader.onload = () => { if (typeof reader.result === "string") setFormData((prev: any) => ({ ...prev, imageUrl: reader.result as string })); };
     reader.readAsDataURL(file);
 
     if (initialProfile?.user_id) {
       try {
         setIsUploading(true);
         const result = await uploadProfileImage(initialProfile.user_id, file, apiKey || "");
-        setFormData(prev => ({ ...prev, imageUrl: result.image_url }));
+        setFormData((prev: any) => ({ ...prev, imageUrl: result.image_url }));
       } catch (e) { alert("Upload failed"); } 
       finally { setIsUploading(false); }
     }
@@ -172,8 +172,9 @@ export default function CreateProfileModal({
         website: formData.website.trim() || undefined,
         twitter: formData.twitter.trim() || undefined,
         telegram: formData.telegram.trim() || undefined,
-        tags: formData.tagsInput.split(",").map(t => t.trim()).filter(Boolean),
+        tags: formData.tagsInput.split(",").map((t: string) => t.trim()).filter(Boolean),
         wallets: initialProfile?.wallets || [],
+        created_at: ""
       });
       onClose();
     } catch (err: any) { setError(err.message || "Save failed"); } 
@@ -231,7 +232,13 @@ export default function CreateProfileModal({
                       )}
                     </div>
                   </div>
-                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e.target.files?.[0])} />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e.currentTarget.files?.[0])}
+                  />
                 </div>
 
                 <div className="flex flex-col justify-center gap-6">
@@ -239,7 +246,7 @@ export default function CreateProfileModal({
                     <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neutral-500"><User size={12} className="text-emerald-500"/> Protocol Handle</label>
                     <input 
                       value={formData.handle} 
-                      onChange={e => setFormData({...formData, handle: e.target.value})}
+                      onChange={(e: { target: { value: any; }; }) => setFormData({...formData, handle: e.target.value})}
                       className="w-full rounded-2xl border border-white/5 bg-white/[0.02] px-5 py-4 text-sm text-white placeholder:text-neutral-700 focus:border-emerald-500/50 focus:bg-white/[0.05] focus:outline-none transition-all"
                       placeholder="e.g. shadow_trader"
                     />
@@ -248,7 +255,7 @@ export default function CreateProfileModal({
                     <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">Public Alias</label>
                     <input 
                       value={formData.displayName}
-                      onChange={e => setFormData({...formData, displayName: e.target.value})}
+                      onChange={(e: { target: { value: any; }; }) => setFormData({...formData, displayName: e.target.value})}
                       className="w-full rounded-2xl border border-white/5 bg-white/[0.02] px-5 py-4 text-sm text-white placeholder:text-neutral-700 focus:border-emerald-500/50 focus:bg-white/[0.05] focus:outline-none transition-all"
                       placeholder="Display Name"
                     />
@@ -261,7 +268,7 @@ export default function CreateProfileModal({
                 <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Transmission Intel (Bio)</label>
                 <textarea 
                   value={formData.bio}
-                  onChange={e => setFormData({...formData, bio: e.target.value})}
+                  onChange={(e: { target: { value: any; }; }) => setFormData({...formData, bio: e.target.value})}
                   rows={3}
                   className="w-full rounded-2xl border border-white/5 bg-white/[0.02] px-6 py-5 text-sm text-white focus:border-emerald-500/50 focus:bg-white/[0.05] focus:outline-none transition-all resize-none leading-relaxed"
                   placeholder="Encryption key decrypted: Input profile biography here..."
@@ -281,7 +288,7 @@ export default function CreateProfileModal({
                     </label>
                     <input 
                       value={(formData as any)[item.key]}
-                      onChange={e => setFormData({...formData, [item.key]: e.target.value})}
+                      onChange={(e: { target: { value: any; }; }) => setFormData({...formData, [item.key]: e.target.value})}
                       className="w-full rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-xs text-white focus:border-white/20 focus:outline-none transition-all"
                       placeholder="https://..."
                     />
@@ -295,7 +302,7 @@ export default function CreateProfileModal({
                   <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neutral-500"><Hash size={12} className="text-pink-500"/> Identity Tags</label>
                   <input 
                     value={formData.tagsInput}
-                    onChange={e => setFormData({...formData, tagsInput: e.target.value})}
+                    onChange={(e: { target: { value: any; }; }) => setFormData({...formData, tagsInput: e.target.value})}
                     className="w-full rounded-2xl border border-white/5 bg-white/[0.02] px-5 py-4 text-xs text-white placeholder:text-neutral-700"
                     placeholder="Degen, Alpha, Developer..."
                   />

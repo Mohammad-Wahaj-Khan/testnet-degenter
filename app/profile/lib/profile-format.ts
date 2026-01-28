@@ -1,5 +1,6 @@
 export const truncateMiddle = (value: string, start = 6, end = 6) => {
   if (!value) return "";
+  if (value.length <= 12) return value; // Don't truncate short values
   if (value.length <= start + end + 3) return value;
   return `${value.slice(0, start)}...${value.slice(-end)}`;
 };

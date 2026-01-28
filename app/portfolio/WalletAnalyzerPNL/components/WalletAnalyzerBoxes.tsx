@@ -898,10 +898,13 @@ export default function WalletAnalyzer({
                           labelFormatter={(value) =>
                             new Date(value).toLocaleDateString()
                           }
-                          formatter={(value: number) => [
-                            `$${value.toFixed(4)}`,
-                            value >= 0 ? "Profit" : "Loss",
-                          ]}
+                          formatter={(value?: number) => {
+                            const safeValue = value ?? 0;
+                            return [
+                              `$${safeValue.toFixed(4)}`,
+                              safeValue >= 0 ? "Profit" : "Loss",
+                            ];
+                          }}
                         />
 
                         {/* Cumulative Line: Shows overall trend */}

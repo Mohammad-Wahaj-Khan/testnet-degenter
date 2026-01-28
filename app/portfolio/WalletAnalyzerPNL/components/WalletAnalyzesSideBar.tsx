@@ -102,14 +102,14 @@ const fetchFromEndpoints = async (
 
 const formatCurrencyCompact = (value: number) => {
   if (!Number.isFinite(value)) return "N/A";
-  
+
   // Format the number with compact notation
-  const formatter = new Intl.NumberFormat('en-US', {
-    notation: 'compact',
+  const formatter = new Intl.NumberFormat("en-US", {
+    notation: "compact",
     maximumFractionDigits: 2,
-    minimumFractionDigits: 0
+    minimumFractionDigits: 0,
   });
-  
+
   // Format the number and add $ sign
   return `$${formatter.format(value)}`;
 };
@@ -195,7 +195,9 @@ export default function WalletAnalyzerSidebar({
         const [holdingsResponse, chartResponse] = await Promise.all([
           fetchFromEndpoints(
             HOLDINGS_API_ENDPOINTS,
-            `wallets/${encodeURIComponent(address)}/portfolio/holdings?source=chain`,
+            `wallets/${encodeURIComponent(
+              address
+            )}/portfolio/holdings?source=chain`,
             {
               cache: "no-store",
               signal: controller.signal,
@@ -359,16 +361,34 @@ export default function WalletAnalyzerSidebar({
         </div>
         <div className="relative  z-10 px-6 py-6 text-white">
           <div className="relative mb-8 overflow-hidden  ">
-            <div className="relative z-10 flex items-start gap-4 rounded-2xl pb-4 border-b border-white/10">
+            <div className="relative z-10 flex items-start gap-4  pb-4 border-b border-white/10">
               <div className="relative h-16 w-16 flex-shrink-0">
-                <Image
-                  src={profile?.image_url || ProfileImg}
-                  alt="Profile"
-                  width={64}
-                  height={64}
-                  className="h-16 w-16 object-cover border border-white/10"
-                  unoptimized={!profile?.image_url}
-                />
+                {profile?.image_url ? (
+                  <Image
+                    src={
+                      profile.image_url.startsWith("http")
+                        ? profile.image_url
+                        : `${process.env.NEXT_PUBLIC_API_BASE_URL}${profile.image_url}`
+                    }
+                    alt="Profile"
+                    width={64}
+                    height={64}
+                    className="h-16 w-16  object-cover border border-white/10"
+                    unoptimized={true}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = ProfileImg.src;
+                    }}
+                  />
+                ) : (
+                  <Image
+                    src={ProfileImg}
+                    alt="Profile"
+                    width={64}
+                    height={64}
+                    className="h-16 w-16 rounded-full object-cover border border-white/10"
+                  />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white tracking-tight truncate">

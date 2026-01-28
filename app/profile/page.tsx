@@ -35,6 +35,7 @@ const GUEST_WALLET_KEY = "degenterGuestWalletId";
 const USER_ID_KEY = "degenterUserId";
 
 const defaultProfile: Profile = {
+  created_at: "",
   handle: "",
   display_name: "",
   bio: "On-chain trader",
@@ -108,62 +109,128 @@ export default function ProfilePage() {
     }
   };
 
-  // Handle wallet connection and profile check with caching
+  // Cache profile data persistently
+  const cacheProfile = (walletAddress: string, profileData: any) => {
+    if (!walletAddress) return;
+
+    const cacheKey = `profile_${walletAddress}`;
+    const profileToCache = {
+      data: profileData,
+      timestamp: Date.now(),
+    };
+
+    // Store in both sessionStorage and localStorage
+    sessionStorage.setItem(cacheKey, JSON.stringify(profileToCache));
+    localStorage.setItem(cacheKey, JSON.stringify(profileToCache));
+
+    // If this is the current user's profile, also store a reference
+    if (walletAddress === address) {
+      localStorage.setItem("currentProfile", walletAddress);
+      if (profileData?.user_id) {
+        localStorage.setItem(USER_ID_KEY, String(profileData.user_id));
+      }
+    }
+  };
+
+  // Get cached profile data
+  const getCachedProfile = (walletAddress: string) => {
+    if (!walletAddress) return null;
+
+    const cacheKey = `profile_${walletAddress}`;
+    // Try sessionStorage first
+    let cached = sessionStorage.getItem(cacheKey);
+
+    // Fall back to localStorage if not in sessionStorage
+    if (!cached) {
+      cached = localStorage.getItem(cacheKey);
+    }
+
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      // Only use cache if it's less than 1 hour old
+      if (Date.now() - parsed.timestamp < 60 * 60 * 1000) {
+        return parsed.data;
+      }
+    }
+    return null;
+  };
+
+  // Function to fetch fresh profile data
+  const fetchFreshProfile = async (walletAddress: string) => {
+    try {
+      if (!walletAddress || !apiKey) return false;
+
+      const walletProfile = await getProfileByWallet(walletAddress, apiKey);
+
+      if (walletProfile) {
+        // Cache the profile data
+        cacheProfile(walletAddress, walletProfile);
+
+        if (walletProfile.handle && walletProfile.user_id) {
+          setProfile(walletProfile);
+          setHasProfile(true);
+          setIsModalOpen(false);
+          return true;
+        }
+      }
+
+      // If no valid profile exists
+      const newProfile: Profile = {
+        ...defaultProfile,
+        wallets: [
+          {
+            address: walletAddress,
+            label: "Main Wallet",
+            is_primary: true,
+            network: "Zigchain",
+          },
+        ],
+      };
+
+      cacheProfile(walletAddress, newProfile);
+      setProfile(newProfile);
+      setHasProfile(false);
+      setIsModalOpen(true);
+      return false;
+    } catch (error) {
+      console.error("Error fetching fresh profile:", error);
+      // Don't show error to user if we have cached data
+      if (address && !getCachedProfile(address)) {
+        setError("Failed to load profile");
+      }
+      return false;
+    }
+  };
+
+  // Handle wallet connection and profile check with enhanced caching
   useEffect(() => {
     // Skip if no address or API key, or if address hasn't changed
     if (!address || !apiKey || address === lastWalletAddress) return;
 
     // Update the last wallet address to prevent duplicate calls
     setLastWalletAddress(address);
-    
+
     const loadProfile = async () => {
       try {
         setIsLoading(true);
-        
-        // Check if we have a cached profile for this address
-        const cacheKey = `profile_${address}`;
-        const cachedProfile = sessionStorage.getItem(cacheKey);
-        
+
+        // Check for cached profile first
+        const cachedProfile = getCachedProfile(address);
         if (cachedProfile) {
-          const parsedProfile = JSON.parse(cachedProfile);
-          // Only use cache if it's less than 5 minutes old
-          if (Date.now() - parsedProfile.timestamp < 5 * 60 * 1000) {
-            setProfile(parsedProfile.data);
-            setHasProfile(!!parsedProfile.data?.handle);
-            setIsModalOpen(!parsedProfile.data?.handle);
-            return;
+          setProfile(cachedProfile);
+          setHasProfile(!!cachedProfile.handle);
+          setIsModalOpen(!cachedProfile.handle);
+
+          // Update in background if cache is older than 1 minute
+          const cacheTimestamp = cachedProfile._cachedAt || 0;
+          if (Date.now() - cacheTimestamp > 60 * 1000) {
+            fetchFreshProfile(address);
           }
+          return;
         }
 
         // No valid cache, fetch fresh data
-        const walletProfile = await getProfileByWallet(address, apiKey);
-        
-        // Cache the profile data
-        if (walletProfile) {
-          const profileToCache = {
-            data: walletProfile,
-            timestamp: Date.now()
-          };
-          sessionStorage.setItem(cacheKey, JSON.stringify(profileToCache));
-        }
-
-        if (walletProfile?.handle && walletProfile?.user_id) {
-          setProfile(walletProfile);
-          setHasProfile(true);
-          setIsModalOpen(false);
-        } else {
-          setHasProfile(false);
-          setProfile({
-            ...defaultProfile,
-            wallets: [{
-              address,
-              label: "Main Wallet",
-              is_primary: true,
-              network: "Zigchain",
-            }],
-          });
-          setIsModalOpen(true);
-        }
+        await fetchFreshProfile(address);
       } catch (error) {
         console.error("Error loading profile:", error);
         setError("Failed to load profile");
@@ -181,16 +248,37 @@ export default function ProfilePage() {
 
   // Initial load and guest wallet handling
   useEffect(() => {
+    // Check for guest wallet ID
     const storedWalletId = localStorage.getItem(GUEST_WALLET_KEY);
     if (storedWalletId) {
       setGuestWalletId(storedWalletId);
     }
 
+    // Check for user ID
     const storedUserId = localStorage.getItem(USER_ID_KEY);
     if (storedUserId) {
       setSavedUserId(storedUserId);
     }
-  }, []);
+
+    // Check for cached profile on initial load
+    if (address) {
+      const cachedProfile = getCachedProfile(address);
+      if (cachedProfile) {
+        setProfile(cachedProfile);
+        setHasProfile(!!cachedProfile.handle);
+        setIsModalOpen(!cachedProfile.handle);
+
+        // Update in background if cache is older than 1 minute
+        const cacheTimestamp = cachedProfile._cachedAt || 0;
+        if (Date.now() - cacheTimestamp > 60 * 1000) {
+          fetchFreshProfile(address);
+        }
+      } else {
+        // If no cached profile, fetch fresh data
+        fetchFreshProfile(address);
+      }
+    }
+  }, [address]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -299,6 +387,7 @@ export default function ProfilePage() {
           ...initialProfileData,
           user_id: profile.user_id,
           handle: payload.handle, // Use the new handle from the payload
+          created_at: profile.created_at ?? "",
         };
         saved = await updateProfile(updateData, apiKey);
       } else {
@@ -411,7 +500,7 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* <div className="flex items-center gap-3">
               {!isWalletConnected ? (
                 <button
                   onClick={() => openView()}
@@ -453,7 +542,7 @@ export default function ProfilePage() {
                   <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                 </button>
               )}
-            </div>
+            </div> */}
           </motion.div>
 
           {/* Main Content Area */}
