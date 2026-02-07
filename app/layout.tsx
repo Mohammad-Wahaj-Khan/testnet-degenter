@@ -47,10 +47,6 @@ export default function RootLayout({
       >
         <ImageFallbackHandler />
         <Providers>
-          {/* LoadingWrapper now wraps the entire app. 
-              It will display the "DT" Pulse animation for 10 seconds 
-              before performing a cinematic blur-reveal of the children.
-          */}
           <LoadingWrapper>
             {children}
           </LoadingWrapper>

@@ -50,7 +50,9 @@ const nextConfig = {
       's2.coinmarketcap.com',
       'encrypted-tbn0.gstatic.com',
       't3.ftcdn.net',
-      'testnetmedia.degenter.io'
+      'testnetmedia.degenter.io',
+      "degenter-token-profile.s3.ap-southeast-2.amazonaws.com",
+      "gateway.pinata.cloud"
     ],
   },
 };

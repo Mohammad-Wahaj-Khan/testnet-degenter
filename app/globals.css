@@ -49,6 +49,21 @@ body {
   background: transparent;
 }
 
+/* iOS WebKit stability mode: reduce effects that frequently crash Safari tabs */
+.ios-webkit-safe * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.ios-webkit-safe .leaderboard-badge,
+.ios-webkit-safe .new-token-badge-flare {
+  animation: none !important;
+}
+
+.ios-webkit-safe [class*="blur-"] {
+  filter: none !important;
+}
+
 .drop-from-top {
   opacity: 0;
   transform: translateY(-40px);

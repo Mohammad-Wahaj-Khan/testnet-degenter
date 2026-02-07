@@ -15,7 +15,7 @@ import {
 } from "react-icons/fa";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import NewImg from "../../public/newimgyellow.png";
+import NewImg from "../../public/newimg.png";
 
 // Assets (design unchanged)
 import WalletImg from "../../public/wallet.svg";
@@ -288,7 +288,13 @@ export default function Navbar() {
 
   useEffect(() => {
     if (!showProfileIntro) return;
-    profileButtonRef.current?.focus({ preventScroll: true });
+    const btn = profileButtonRef.current;
+    if (!btn) return;
+    try {
+      btn.focus({ preventScroll: true });
+    } catch {
+      btn.focus();
+    }
   }, [showProfileIntro]);
 
   useEffect(() => {
@@ -520,7 +526,7 @@ export default function Navbar() {
               <nav className="flex items-center gap-4 xl:gap-10">
                 {/* <FindTradersNavItem /> */}
                 <ExploreNavItem />
-                <NavItem label="Wallet Tracker" hasDropdown />
+                {/* <NavItem label="Tracker" hasDropdown /> */}
                 <NavItem label="Earn" hasDropdown />
                 <NavItem label="Terminal" hasDropdown />
                 <NavItem label="Resources" hasDropdown />
@@ -702,7 +708,7 @@ export default function Navbar() {
             <nav className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">
               {/* <FindTradersNavItem /> */}
               <ExploreNavItem />
-              <NavItem label="Wallet Tracker" hasDropdown />
+              {/* <NavItem label="Tracker" hasDropdown /> */}
               <NavItem label="Earn" hasDropdown />
               <NavItem label="Terminal" hasDropdown />
               <NavItem label="Resources" hasDropdown />
@@ -790,10 +796,9 @@ function FindTradersNavItem({ mobile }: { mobile?: boolean }) {
 }
 
 function ExploreNavItem({ mobile }: { mobile?: boolean }) {
-  const badgeWidth = 35;
-  const badgeHeight = 18;
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -808,6 +813,22 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  const openMenu = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    setIsOpen(true);
+  };
+
+  const closeMenuWithDelay = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setIsOpen(false), 140);
+  };
 
   const menuItems = [
     {
@@ -847,8 +868,8 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
       icon: FaChartLine,
       title: "Insight",
       subtitle: "Market insights and analytics",
-      href: "/insights",
-      locked: false,
+      href: "/",
+      locked: true,
     },
     // {
     //   icon: FaPlusCircle,
@@ -890,7 +911,7 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
                   onClick={() => setIsOpen(false)}
                   aria-disabled={item.locked}
                 >
-                  <item.icon className="text-2xl text-gray-400 group-hover:text-yellow-400 transition-colors" />
+                  <item.icon className="text-2xl text-gray-400 group-hover:text-red-500 transition-colors" />
                   <div className="flex-1">
                     <div className="flex items-center">
                       <span className="text-sm font-medium text-white">
@@ -914,24 +935,19 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
   }
 
   return (
-    <div className="relative" ref={containerRef}>
-      <div
-        className="flex items-center relative"
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
-      >
+    <div
+      className="relative"
+      ref={containerRef}
+      onMouseEnter={openMenu}
+      onMouseLeave={closeMenuWithDelay}
+    >
+      <div className="flex items-center relative">
         <button className="flex items-center gap-2 px-3 py-2 text-white rounded-lg transition-colors  group">
           <div className="flex items-center">
             <span className="relative">Explore</span>
-            <Image
-              src={NewImg}
-              alt="New Find Traders badge"
-              width={badgeWidth}
-              height={badgeHeight}
-              className="h-6 w-auto select-none leaderboard-badge"
-              draggable={false}
-              priority
-            />
+            <span className="ml-2 inline-flex items-center rounded-full border border-red-400/60 bg-red-600/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-300 animate-pulse">
+              New
+            </span>
           </div>
           <ChevronDown
             className={`h-3.5 w-3.5 transition-transform ${
@@ -943,11 +959,10 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
 
       {isOpen && (
         <div
-          className="absolute left-0 mt-1 w-[600px] rounded-lg bg-black border border-gray-800 p-4 shadow-2xl z-[1000]"
-          onMouseEnter={() => setIsOpen(true)}
-          onMouseLeave={() => setIsOpen(false)}
+          className="absolute left-0 top-full pt-1 w-[600px] z-[1000]"
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg bg-black border border-gray-800 p-4 shadow-2xl">
+            <div className="grid grid-cols-2 gap-3">
             {menuItems.map((item, index) => (
               <Link
                 key={index}
@@ -961,7 +976,7 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
                 onClick={() => setIsOpen(false)}
               >
                 <div className="flex-shrink-0 p-2 rounded-lg bg-black group-hover:bg-yellow-500/10 transition-colors">
-                  <item.icon className="text-xl text-gray-400 group-hover:text-yellow-400 transition-colors" />
+                  <item.icon className="text-xl text-gray-400 group-hover:text-red-500 transition-colors" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -970,8 +985,8 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
                     </span>
                     {item.isNew && (
                       <span className="relative ml-2 flex h-4 w-2 items-center">
-                        <span className="absolute inline-flex h-2 w-2 rounded-full bg-yellow-400 opacity-75"></span>
-                        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-yellow-400"></span>
+                        <span className="absolute inline-flex h-2 w-2 rounded-full bg-red-400 opacity-75"></span>
+                        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-red-400"></span>
                       </span>
                     )}
                     {item.locked && (
@@ -984,6 +999,7 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
                 </div>
               </Link>
             ))}
+            </div>
           </div>
         </div>
       )}

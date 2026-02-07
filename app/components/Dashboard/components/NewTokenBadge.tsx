@@ -1,33 +1,19 @@
-import Image from "next/image";
 import React from "react";
 
 interface NewTokenBadgeProps {
   title?: string;
   className?: string;
-  width?: number;
-  height?: number;
 }
-
-const DEFAULT_WIDTH = 50;
-const DEFAULT_HEIGHT = 50;
 
 const NewTokenBadge: React.FC<NewTokenBadgeProps> = ({
   title = "Recently Launched", // token whose launched on last 5 days
   className,
-  width = DEFAULT_WIDTH,
-  height = DEFAULT_HEIGHT,
 }) => (
-  <div className={`new-token-badge new-token-badge-flare ${className ?? ""}`}>
-    <Image
-      src="/newimgyellow.png"
-      alt="New token badge"
-      width={width}
-      height={height}
-      title={title}
-      className="block"
-      draggable={false}
-      priority
-    />
+  <div
+    title={title}
+    className={`new-token-badge new-token-badge-flare inline-flex items-center rounded-full border border-red-400/60 bg-red-600/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-300 ${className ?? ""}`}
+  >
+    New
   </div>
 );
 

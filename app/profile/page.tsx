@@ -30,6 +30,7 @@ import Navbar from "../components/navbar";
 import TopMarketToken from "../components/TopMarketToken";
 import { useChain } from "@cosmos-kit/react";
 import { CHAIN_NAME } from "../config/chain";
+import { safeRandomUUID } from "@/lib/utils/compat";
 
 const GUEST_WALLET_KEY = "degenterGuestWalletId";
 const USER_ID_KEY = "degenterUserId";
@@ -284,10 +285,7 @@ export default function ProfilePage() {
     if (typeof window === "undefined") return;
     const storedWallet = localStorage.getItem(GUEST_WALLET_KEY);
     if (!storedWallet) {
-      const generated =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? `guest-${crypto.randomUUID()}`
-          : `guest-${Math.random().toString(36).slice(2, 10)}`;
+      const generated = `guest-${safeRandomUUID()}`;
       localStorage.setItem(GUEST_WALLET_KEY, generated);
       setGuestWalletId(generated);
     }

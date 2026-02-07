@@ -54,7 +54,16 @@ const NewListing: React.FC<{ LatestListing: DashboardToken[] }> = ({
     return () => ctx.revert();
   }, [LatestListing]); // Re-run if list changes
 
+  const formatZigShort = (value: string) => {
+    if (/^zig/i.test(value) && value.length > 12) {
+      return `${value.slice(0, 6)}...${value.slice(-4)}`;
+    }
+    return value;
+  };
+
   const formatDenom = (denom: string) => {
+    const zigShort = formatZigShort(denom);
+    if (zigShort !== denom) return zigShort;
     if (denom.length <= 10) return denom;
     return denom.substring(0, 16) + "..." + denom.slice(-8);
   };
@@ -63,7 +72,8 @@ const NewListing: React.FC<{ LatestListing: DashboardToken[] }> = ({
     const name = token.name || "";
     const symbol = token.symbol || "";
     if (name.toLowerCase().includes("coin") && symbol) return symbol;
-    return name || symbol;
+    const display = name || symbol;
+    return formatZigShort(display);
   };
 
   // Sort tokens by creationTime in descending order (newest first)
@@ -114,13 +124,15 @@ const NewListing: React.FC<{ LatestListing: DashboardToken[] }> = ({
             className="sticky top-0 bg-black rounded-lg p-2 hover:bg-black/90 transition-colors origin-top z-20"
           >
             <div className="flex 2xl:flex-row flex-col items-center gap-8 w-full">
-              <Image
-                src={token.image || "/Bitcoin.webp"}
-                alt={getDisplayName(token)}
-                className="rounded-lg bg-white"
-                width={120}
-                height={120}
-              />
+              <div className="w-[88px] h-[88px] 2xl:w-[104px] 2xl:h-[104px] overflow-hidden rounded-lg bg-white shrink-0">
+                <Image
+                  src={token.image || "/Bitcoin.webp"}
+                  alt={getDisplayName(token)}
+                  className="w-full h-full object-cover"
+                  width={104}
+                  height={104}
+                />
+              </div>
 
               <div className="flex flex-col justify-between w-full">
                 <div className="flex justify-between w-full">
@@ -131,7 +143,9 @@ const NewListing: React.FC<{ LatestListing: DashboardToken[] }> = ({
                       </div>
                       {isTokenNew(token.creationTime) && <NewTokenBadge />}
                     </div>
-                    <div className="text-[#919191] text-sm">{token.symbol}</div>
+                    <div className="text-[#919191] text-sm">
+                      {formatZigShort(token.symbol || "")}
+                    </div>
                     <div className="text-[#919191] text-xs">
                       {formatDenom(token.denom || "")}
                     </div>

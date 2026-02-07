@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import LoadingAnimation from "./components/LoadingAnimation";
+import dynamic from "next/dynamic";
+
+const LoadingAnimation = dynamic(() => import("./components/LoadingAnimation"), {
+  ssr: false,
+});
 
 export default function LoadingWrapper({
   children,
@@ -10,6 +14,18 @@ export default function LoadingWrapper({
 }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [showUI, setShowUI] = useState(false);
+  const [useLightLoader, setUseLightLoader] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = window.navigator.userAgent || "";
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isSmallMobile = window.innerWidth <= 820;
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    setUseLightLoader(isIOS || isSmallMobile || prefersReducedMotion);
+  }, []);
 
   useEffect(() => {
     // 10 Second Cinematic Lock
@@ -17,7 +33,7 @@ export default function LoadingWrapper({
       setIsLoaded(true);
       // Slight offset for the smooth blur-in reveal
       setTimeout(() => setShowUI(true), 100);
-    }, 3000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);
@@ -30,7 +46,15 @@ export default function LoadingWrapper({
             isLoaded ? "opacity-0 scale-150 blur-3xl" : "opacity-100 scale-100"
           }`}
         >
-          <LoadingAnimation />
+          {/* {useLightLoader ? (
+            <div className="flex h-full w-full items-center justify-center bg-black">
+              <p className="text-2xl font-semibold tracking-[0.2em] text-white/90">
+                DEGEN TERMINAL
+              </p>
+            </div>
+          ) : ( */}
+            <LoadingAnimation />
+          {/* )} */}
         </div>
       )}
 

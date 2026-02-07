@@ -12,6 +12,11 @@ import { useTokenSummary } from "@/app/hooks/useTokenSummary";
 import { tokenAPI, type TokenDetailResponse, API_BASE_URL } from "@/lib/api";
 
 const API_BASE = API_BASE_URL;
+const LCD_URL =
+  process.env.NEXT_PUBLIC_LCD_URL_DEGENTER ||
+  process.env.NEXT_PUBLIC_LCD_URL_DEGEN ||
+  process.env.LCD_URL_DEGENTER ||
+  "";
 
 /* ---------------- Types ---------------- */
 interface Token {
@@ -21,6 +26,7 @@ interface Token {
   display?: string;
   description: string;
   icon: string | null;
+  denom?: string | null;
   twitter?: string | null;
   telegram?: string | null;
   website?: string | null;
@@ -143,6 +149,7 @@ async function fetchTokenBySymbol(symbol: string): Promise<Token | null> {
       description:
         t.description || t.name || "Hello everyone! This is a Degenter token.",
       icon: derivedIcon,
+      denom: t.denom || null,
       twitter: twitterUrl,
       telegram: t.telegram || null,
       website: t.website || null,
@@ -194,6 +201,11 @@ export default function AddLeft() {
   const tokenKey = Array.isArray(tokenDetails) ? tokenDetails[0] : tokenDetails;
   const summaryTokenKey =
     token?.symbol || token?.display || resolvedTokenKey || tokenKey;
+  const STEP_ID = "coin.zig14q8mczmvk9yc6xc5a2ghkqapwhek0d2yzf9400.stepie";
+  const isStepie =
+    summaryTokenKey === STEP_ID ||
+    token?.denom === STEP_ID ||
+    token?.display === STEP_ID;
   const { data: summaryData } = useTokenSummary({
     tokenId: token?.id,
     tokenKey: summaryTokenKey,
@@ -347,34 +359,52 @@ export default function AddLeft() {
               </div>
               <div className="flex gap-2">
                 {token.telegram && (
-                  <a
-                    href={token.telegram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
-                  >
-                    <FaTelegramPlane size={15} className="text-white" />
-                  </a>
+                  isStepie ? (
+                    <span className="bg-black/50 p-2 rounded-full opacity-60 cursor-not-allowed">
+                      <FaTelegramPlane size={15} className="text-white" />
+                    </span>
+                  ) : (
+                    <a
+                      href={token.telegram}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
+                    >
+                      <FaTelegramPlane size={15} className="text-white" />
+                    </a>
+                  )
                 )}
                 {token.twitter && (
-                  <a
-                    href={token.twitter}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
-                  >
-                    <BsTwitterX size={13} className="text-white" />
-                  </a>
+                  isStepie ? (
+                    <span className="bg-black/50 p-2 rounded-full opacity-60 cursor-not-allowed">
+                      <BsTwitterX size={13} className="text-white" />
+                    </span>
+                  ) : (
+                    <a
+                      href={token.twitter}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
+                    >
+                      <BsTwitterX size={13} className="text-white" />
+                    </a>
+                  )
                 )}
                 {token.website && (
-                  <a
-                    href={token.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
-                  >
-                    <HiGlobeAsiaAustralia size={15} className="text-white" />
-                  </a>
+                  isStepie ? (
+                    <span className="bg-black/50 p-2 rounded-full opacity-60 cursor-not-allowed">
+                      <HiGlobeAsiaAustralia size={15} className="text-white" />
+                    </span>
+                  ) : (
+                    <a
+                      href={token.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-black/50 p-2 rounded-full hover:bg-black/70 transition"
+                    >
+                      <HiGlobeAsiaAustralia size={15} className="text-white" />
+                    </a>
+                  )
                 )}
               </div>
             </div>
@@ -424,28 +454,45 @@ export default function AddLeft() {
           <div className="flex gap-2 justify-center">
             <span className="bg-black/50 px-2 py-1 rounded-[0.3rem]">
               <FaTelegramPlane size={14} />
-              {token?.telegram}
-              {token?.telegram && (
-                <Link href={token.telegram} target="_blank">
-                  <HiGlobeAsiaAustralia size={15} className="text-white" />
-                </Link>
-              )}
+              {!isStepie && token?.telegram}
+              {/* {token?.telegram &&
+                (isStepie ? (
+                  <span className="opacity-60 cursor-not-allowed">
+                    <HiGlobeAsiaAustralia size={15} className="text-white" />
+                  </span>
+                ) : (
+                  <Link href={token.telegram} target="_blank">
+                    <HiGlobeAsiaAustralia size={15} className="text-white" />
+                  </Link>
+                ))} */}
             </span>
             <span className="bg-black/50 px-2 py-1 rounded-[0.3rem]">
               <BsTwitterX size={12} />
-              {token?.twitter && (
-                <Link href={token.twitter} target="_blank">
-                  <HiGlobeAsiaAustralia size={15} className="text-white" />
-                </Link>
-              )}
+              {!isStepie && token?.twitter}
+              {/* {token?.twitter &&
+                (isStepie ? (
+                  <span className="opacity-60 cursor-not-allowed">
+                    <HiGlobeAsiaAustralia size={15} className="text-white" />
+                  </span>
+                ) : (
+                  <Link href={token.twitter} target="_blank">
+                    <HiGlobeAsiaAustralia size={15} className="text-white" />
+                  </Link>
+                ))} */}
             </span>
             <span className="bg-black/50 px-2 py-1 rounded-[0.3rem]">
               <HiGlobeAsiaAustralia size={14} />
-              {token?.website && (
-                <Link href={token.website} target="_blank">
-                  <HiGlobeAsiaAustralia size={15} className="text-white" />
-                </Link>
-              )}
+              {!isStepie && token?.website}
+              {/* {token?.website &&
+                (isStepie ? (
+                  <span className="opacity-60 cursor-not-allowed">
+                    <HiGlobeAsiaAustralia size={15} className="text-white" />
+                  </span>
+                ) : (
+                  <Link href={token.website} target="_blank">
+                    <HiGlobeAsiaAustralia size={15} className="text-white" />
+                  </Link>
+                ))} */}
             </span>
           </div>
         </div>

@@ -17,6 +17,7 @@ import { Copy, Expand, RefreshCw, Share2 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { SignerFilterSummary } from "@/app/components/RecentTrades";
 import { API_BASE_URL } from "@/lib/api";
+import { getLast } from "@/lib/utils/compat";
 
 declare global {
   interface Window {
@@ -30,7 +31,8 @@ const API_BASE = API_BASE_URL;
 const API_KEY =
   process.env.NEXT_PUBLIC_X_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
 const API_HEADERS: HeadersInit = API_KEY ? { "x-api-key": API_KEY } : {};
-const WS_URL = "wss://public-zigchain-testnet-rpc.numia.xyz/websocket";
+const WS_URL =
+  process.env.NEXT_PUBLIC_TRADES_WS_URL || "";
 const NATIVE_DENOM = "uzig";
 const CANDLE_UP_COLOR = "#089981";
 const CANDLE_DOWN_COLOR = "#f23645";
@@ -338,16 +340,25 @@ function makeDatafeed(
   getSupply: () => number | null,
   getTokenExponent: () => number,
   getContractAddress: () => string | null,
+  getPoolId: () => string | null,
   setLivePriceCb: (p: { zig: number; ts: number }) => void
 ) {
-  const subs = new Map<string, { onRealtime: (bar: any) => void; tf: TfKey }>();
+  const subs = new Map<
+    string,
+    {
+      onRealtime: (bar: any) => void;
+      tf: TfKey;
+      onReset?: () => void;
+    }
+  >();
   const lastTimestamps = new Map<TfKey, number>();
   const lastRealtimeBar = new Map<TfKey, FeedCandle>();
   const lastCloseByTf = new Map<TfKey, number>();
   let ws: WebSocket | null = null;
-  let reconnectTimer: NodeJS.Timeout | null = null;
   let manuallyClosed = false;
   let boundaryTimer: NodeJS.Timeout | null = null;
+  let reconnectTimer: NodeJS.Timeout | null = null;
+  let reconnectAttempts = 0;
 
   async function fetchBars(tf: TfKey, fromSec: number, toSec: number) {
     const mode = getMode();
@@ -397,6 +408,13 @@ function makeDatafeed(
       ws?.close();
     } catch {}
     ws = null;
+    reconnectAttempts = 0;
+  };
+
+  const resetRealtimeState = () => {
+    lastTimestamps.clear();
+    lastRealtimeBar.clear();
+    lastCloseByTf.clear();
   };
 
   const setLastBar = (tf: TfKey, bar: FeedCandle, emit = true) => {
@@ -431,52 +449,35 @@ function makeDatafeed(
 
   const scheduleReconnect = () => {
     if (manuallyClosed) return;
+    if (reconnectAttempts >= 5) return;
     if (reconnectTimer) return;
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+    reconnectAttempts += 1;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       connectWs();
-    }, 1200);
+    }, delay);
   };
 
   const sendSubs = () => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const contract = getContractAddress();
-    if (contract) {
-      const query = `tm.event='Tx' AND wasm._contract_address='${contract}' AND wasm.action='swap'`;
-      try {
-        ws!.send(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: `swap-contract-${Date.now()}`,
-            method: "subscribe",
-            params: { query },
-          })
-        );
-      } catch (e) {
-        console.error("WS subscribe failed", e);
-      }
-      return;
+    const poolId = getPoolId();
+    if (!poolId) return;
+    const unit = getUnit() === "native" ? "zig" : "usd";
+    const baseTf: TfKey = "1m";
+    try {
+      ws!.send(
+        JSON.stringify({
+          type: "sub",
+          stream: "candles",
+          pool_id: String(poolId),
+          tf: baseTf,
+          unit,
+        })
+      );
+    } catch (e) {
+      console.error("WS subscribe failed", e);
     }
-
-    const tokenDenom = tokenId;
-    const queries = [
-      `tm.event='Tx' AND wasm.action='swap' AND wasm.offer_asset='${tokenDenom}' AND wasm.ask_asset='${NATIVE_DENOM}'`,
-      `tm.event='Tx' AND wasm.action='swap' AND wasm.offer_asset='${NATIVE_DENOM}' AND wasm.ask_asset='${tokenDenom}'`,
-    ];
-    queries.forEach((q, idx) => {
-      try {
-        ws!.send(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: `swap-${idx}-${Date.now()}`,
-            method: "subscribe",
-            params: { query: q },
-          })
-        );
-      } catch (e) {
-        console.error("WS subscribe failed", e);
-      }
-    });
   };
 
   const fillMissingBuckets = (
@@ -631,8 +632,98 @@ function makeDatafeed(
         console.debug("WS error payload ignored", msg.error);
         return;
       }
-      const swap = deriveSwapFromWs(msg, tokenId, getTokenExponent());
-      if (swap) pushSwapToSubscribers(swap);
+      if (msg?.type === "hello") {
+        sendSubs();
+        return;
+      }
+      if (msg?.type !== "candle") return;
+      console.debug("Candles WS message:", msg);
+      const poolId = getPoolId();
+      if (!poolId || String(msg?.pool_id) !== String(poolId)) return;
+      const tf = msg?.tf as TfKey | undefined;
+      if (!tf || !(tf in STEP_SEC)) return;
+      const unit = msg?.unit;
+      const expectedUnit = getUnit() === "native" ? "zig" : "usd";
+      if (unit && unit !== expectedUnit) return;
+      const data = msg?.data || {};
+      const bucketStart = data?.bucket_start || msg?.bucket_start;
+      const timeMs = bucketStart ? Date.parse(bucketStart) : NaN;
+      if (!Number.isFinite(timeMs)) return;
+      const open = Number(data?.open);
+      const high = Number(data?.high);
+      const low = Number(data?.low);
+      const close = Number(data?.close);
+      if (![open, high, low, close].every(Number.isFinite)) return;
+
+      const volume = Number(data?.volume ?? 0);
+      const candle: FeedCandle = {
+        time: timeMs,
+        open,
+        high,
+        low,
+        close,
+        volume: Number.isFinite(volume) ? volume : 0,
+      };
+
+      const tsSec = Math.floor(timeMs / 1000);
+      const applyCandleToTf = (targetTf: TfKey, base: FeedCandle) => {
+        const step = STEP_SEC[targetTf];
+        const bucket = alignFloor(tsSec, step) * 1000;
+        const prev = lastRealtimeBar.get(targetTf);
+        const fallbackClose = lastCloseByTf.get(targetTf);
+        const anchorTime = prev?.time ?? lastTimestamps.get(targetTf) ?? null;
+        const anchorClose = prev?.close ?? fallbackClose ?? null;
+        fillMissingBuckets(targetTf, bucket, anchorTime, anchorClose);
+
+        const current = lastRealtimeBar.get(targetTf);
+        if (!current || current.time !== bucket) {
+          const openBase =
+            current?.close ?? fallbackClose ?? base.open ?? base.close;
+          const bar: FeedCandle = {
+            time: bucket,
+            open: openBase,
+            high: Math.max(openBase, base.high),
+            low: Math.min(openBase, base.low),
+            close: base.close,
+            volume: base.volume ?? 0,
+          };
+          setLastBar(targetTf, bar, true);
+          return;
+        }
+
+        const updated: FeedCandle = {
+          ...current,
+          high: Math.max(current.high, base.high),
+          low: Math.min(current.low, base.low),
+          close: base.close,
+          volume: (current.volume || 0) + (base.volume ?? 0),
+        };
+        setLastBar(targetTf, updated, true);
+      };
+
+      if (tf === "1m") {
+        applyCandleToTf("1m", candle);
+      } else {
+        setLastBar(tf, candle, true);
+      }
+
+      if (tf === "1m") {
+        const tfs = uniqueTfs().filter((t) => t !== "1m");
+        for (const targetTf of tfs) {
+          applyCandleToTf(targetTf, candle);
+        }
+      }
+
+      const zigUsd = getZigUsd();
+      const zigPrice =
+        expectedUnit === "zig"
+          ? close
+          : zigUsd > 0
+          ? close / zigUsd
+          : null;
+      if (zigPrice && Number.isFinite(zigPrice) && zigPrice > 0) {
+        setLivePriceCb({ zig: zigPrice, ts: timeMs });
+      }
     })().catch((e) => console.error("ws msg parse", e));
   };
 
@@ -646,7 +737,10 @@ function makeDatafeed(
     manuallyClosed = false;
     try {
       ws = new WebSocket(WS_URL);
-      ws.onopen = () => sendSubs();
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+        sendSubs();
+      };
       ws.onmessage = handleWsMessage;
       ws.onclose = () => {
         ws = null;
@@ -824,11 +918,13 @@ function makeDatafeed(
       _info: any,
       resolution: string,
       onRealtime: any,
-      uid: string
+      uid: string,
+      onResetCacheNeededCallback?: () => void
     ) => {
       const tf = TF_MAP[resolution] ?? "1h";
-      subs.set(uid, { onRealtime, tf });
+      subs.set(uid, { onRealtime, tf, onReset: onResetCacheNeededCallback });
       connectWs();
+      sendSubs();
     },
 
     unsubscribeBars: (uid: string) => {
@@ -843,6 +939,15 @@ function makeDatafeed(
     destroy: () => {
       closeWs();
       subs.clear();
+    },
+    resubscribe: () => {
+      resetRealtimeState();
+      sendSubs();
+    },
+    resetCache: () => {
+      resetRealtimeState();
+      subs.forEach((s) => s.onReset?.());
+      sendSubs();
     },
   };
 }
@@ -944,7 +1049,11 @@ export default function TradingChart({
 }: TradingChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<any>(null);
-  const datafeedRef = useRef<{ destroy?: () => void } | null>(null);
+  const datafeedRef = useRef<{
+    destroy?: () => void;
+    resubscribe?: () => void;
+    resetCache?: () => void;
+  } | null>(null);
   const tvShapeIdsRef = useRef<string[]>([]);
   const tvShapeByKeyRef = useRef<Map<string, string>>(new Map());
   const tvBucketCountRef = useRef<Map<string, number>>(new Map());
@@ -969,7 +1078,7 @@ export default function TradingChart({
 
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
   const [currentView, setCurrentView] = useState<ChartView>("price");
-  const [priceDisplay, setPriceDisplay] = useState<PriceDisplay>("usd");
+  const [priceDisplay, setPriceDisplay] = useState<PriceDisplay>("native");
   const [chartReady, setChartReady] = useState(false);
   const initedRef = useRef(false);
   const [copied, setCopied] = useState<{ type: "url" | "denom"; show: boolean }>({
@@ -978,11 +1087,12 @@ export default function TradingChart({
   });
   const [activeTf, setActiveTf] = useState<TfKey>("1h");
   const [mode, setMode] = useState<ChartMode>("price");
-  const [unit, setUnit] = useState<ChartUnit>("usd");
+  const [unit, setUnit] = useState<ChartUnit>("native");
   const [viewMode, setViewMode] = useState<ViewRangeMode>("recent");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contractAddress, setContractAddress] = useState<string | null>(null);
+  const [poolId, setPoolId] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState<string>("1h");
   const [lastFetched, setLastFetched] = useState<{ [key: string]: number }>({});
   const [livePrice, setLivePrice] = useState<{ zig: number; ts: number } | null>(
@@ -1014,6 +1124,7 @@ export default function TradingChart({
   const supplyRef = useRef<number | null>(null);
   const tokenExponentRef = useRef<number>(6);
   const contractAddressRef = useRef<string | null>(null);
+  const poolIdRef = useRef<string | null>(null);
   const modeRef = useRef<ChartMode>(mode);
   const unitRef = useRef<ChartUnit>(unit);
 
@@ -1272,6 +1383,7 @@ const applyTvWalletShapes = useCallback(async () => {
     () => contractAddressRef.current,
     []
   );
+  const getPoolId = useCallback(() => poolIdRef.current, []);
 
   const fetchTokenData = useCallback(async () => {
     const cacheKey = `token_${token}`;
@@ -1302,6 +1414,16 @@ const applyTvWalletShapes = useCallback(async () => {
         const apiData = await apiResponse.json();
         if (apiData?.success) {
           const normalized = normalizeTokenPayload(apiData.data, token);
+          const poolIdValue =
+            apiData?.data?.price?.poolId ??
+            apiData?.data?.poolId ??
+            (normalized as any)?.price?.poolId ??
+            (normalized as any)?.poolId ??
+            null;
+          if (poolIdValue != null && poolIdValue !== "") {
+            poolIdRef.current = String(poolIdValue);
+            setPoolId(String(poolIdValue));
+          }
           localStorage.setItem(cacheKey, JSON.stringify(normalized));
           setLastFetched((prev) => ({ ...prev, [token]: now }));
 
@@ -1440,6 +1562,8 @@ const applyTvWalletShapes = useCallback(async () => {
   useEffect(() => {
     setContractAddress(null);
     contractAddressRef.current = null;
+    setPoolId(null);
+    poolIdRef.current = null;
   }, [token]);
 
   // fetch pool contract
@@ -1473,9 +1597,21 @@ const applyTvWalletShapes = useCallback(async () => {
         if (!pool) return;
         const contractAddr =
           pool?.pair_contract || pool?.pairContract || pool?.contract_address;
-        if (contractAddr && !cancelled) {
-          contractAddressRef.current = contractAddr;
-          setContractAddress(contractAddr);
+        const poolIdValue =
+          pool?.pool_id ??
+          pool?.poolId ??
+          pool?.id ??
+          pool?.poolID ??
+          pool?.poolIdNumber;
+        if (!cancelled) {
+          if (contractAddr) {
+            contractAddressRef.current = contractAddr;
+            setContractAddress(contractAddr);
+          }
+          if (poolIdValue != null && poolIdValue !== "") {
+            poolIdRef.current = String(poolIdValue);
+            setPoolId(String(poolIdValue));
+          }
         }
       } catch (err) {
         console.error("TradingChart pool contract fetch failed", err);
@@ -1586,6 +1722,7 @@ const applyTvWalletShapes = useCallback(async () => {
           getSupply,
           getTokenExponent,
           getContractAddress,
+          getPoolId,
           (p) => setLivePrice(p)
         );
         datafeedRef.current = datafeed;
@@ -1649,22 +1786,18 @@ const applyTvWalletShapes = useCallback(async () => {
       } catch {}
       datafeedRef.current = null;
     };
-  }, [
-    token,
-    mode,
-    unit,
-    contractAddress,
-    getMode,
-    getUnit,
-    getZigUsd,
-    getSupply,
-    getTokenExponent,
-    getContractAddress,
-  ]);
+  }, [token, getMode, getUnit, getZigUsd, getSupply, getTokenExponent, getContractAddress, getPoolId]);
 
   useEffect(() => {
     void applyTvWalletShapesRef.current();
   }, [applyTvWalletShapes, mode, unit, signerSummary, token]);
+
+  useEffect(() => {
+    datafeedRef.current?.resetCache?.();
+    try {
+      widgetRef.current?.activeChart?.().resetData?.();
+    } catch {}
+  }, [unit, mode, poolId, activeTf]);
 
   // ---- extra lightweight-charts header stuff (kept as in your file) ----
   const chartHostRef = useRef<HTMLDivElement | null>(null);
@@ -1996,7 +2129,7 @@ const applyTvWalletShapes = useCallback(async () => {
     sRef.current?.setData(cur.map(toCandle));
     vRef.current?.setData(cur.map(toVol));
     applyWalletMarkers();
-    newestSecRef.current = cur.at(-1)?.time ?? bar.time;
+    newestSecRef.current = getLast(cur)?.time ?? bar.time;
     const prev = lastPriceRef.current;
     if (prev != null)
       setPriceDir(bar.close > prev ? "high" : bar.close < prev ? "low" : "");
@@ -2058,7 +2191,7 @@ const applyTvWalletShapes = useCallback(async () => {
           });
       }
 
-      historyLockCeilRef.current = out.at(-1)?.time ?? cap;
+      historyLockCeilRef.current = getLast(out)?.time ?? cap;
 
       const nowBucketStart = alignFloorSec(nowSec, cfg.stepSec) as UTCTimestamp;
       if (out.length && out[out.length - 1].time < nowBucketStart) {
@@ -2076,13 +2209,13 @@ const applyTvWalletShapes = useCallback(async () => {
 
       barsRef.current = out;
       oldestSecRef.current = out[0]?.time ?? start;
-      newestSecRef.current = out.at(-1)?.time ?? cap;
+      newestSecRef.current = getLast(out)?.time ?? cap;
 
       const lastReal =
         [...out]
           .reverse()
           .find((b) => (b.volume ?? 0) > 0 || b.high !== b.low) ??
-        out.at(-1) ??
+        getLast(out) ??
         null;
       if (lastReal) {
         const changePct =
@@ -2114,7 +2247,7 @@ const applyTvWalletShapes = useCallback(async () => {
         if (viewMode === "history")
           chartRef.current
             .timeScale()
-            .setVisibleRange({ from: out[0].time, to: out.at(-1)!.time });
+            .setVisibleRange({ from: out[0].time, to: getLast(out)!.time });
         else {
           const count = out.length;
           const visibleBars = Math.min(100, count);
@@ -2165,7 +2298,7 @@ const applyTvWalletShapes = useCallback(async () => {
         [...merged]
           .reverse()
           .find((b) => (b.volume ?? 0) > 0 || b.high !== b.low) ??
-        merged.at(-1)!;
+        getLast(merged)!;
       const prec = precisionFor(lastReal.close);
       sRef.current?.applyOptions({
         priceFormat: {
@@ -2281,7 +2414,7 @@ const applyTvWalletShapes = useCallback(async () => {
       }
     }
 
-    const prevClose = barsRef.current.at(-1)?.close ?? mins[0]?.open ?? null;
+    const prevClose = getLast(barsRef.current)?.close ?? mins[0]?.open ?? null;
 
     if (!mins.length) {
       if (prevClose == null) return "empty";
