@@ -707,7 +707,7 @@ export default function Navbar() {
             {/* Navigation links */}
             <nav className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">
               {/* <FindTradersNavItem /> */}
-              <ExploreNavItem />
+              <ExploreNavItem mobile />
               {/* <NavItem label="Tracker" hasDropdown /> */}
               <NavItem label="Earn" hasDropdown />
               <NavItem label="Terminal" hasDropdown />
@@ -897,15 +897,15 @@ function ExploreNavItem({ mobile }: { mobile?: boolean }) {
           />
         </button>
         {isOpen && (
-          <div className="mt-2 rounded-lg bg-black p-4 backdrop-blur-sm z-10">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="mt-2 rounded-lg bg-black p-4 backdrop-blur-sm z-10 max-w-full overflow-hidden">
+            <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto">
               {menuItems.map((item, index) => (
                 <Link
                   key={index}
                   href={item.href}
                   target={item.external ? "_blank" : "_self"}
                   rel={item.external ? "noreferrer noopener" : ""}
-                  className={`group flex items-start space-x-3 rounded-lg p-3 transition-colors ${
+                  className={`group flex flex-col items-start gap-2 rounded-lg p-3 transition-colors ${
                     item.locked ? "" : "hover:bg-gray-800"
                   }`}
                   onClick={() => setIsOpen(false)}
